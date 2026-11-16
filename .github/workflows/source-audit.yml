@@ -10,6 +10,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: newsstudioai-v0.2.1-release
+  cancel-in-progress: true
 jobs:
   source-audit:
     runs-on: ubuntu-latest
@@ -43,6 +46,13 @@ jobs:
           python -m compileall -q app.py launcher.py tests
           node --check static/app.js
           python -m pytest -q
+      - name: Remove test caches and local database
+        shell: bash
+        run: |
+          find NewsStudioAI_v02 -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -prune -exec rm -rf {} +
+          find NewsStudioAI_v02 -type f -name '*.pyc' -delete
+          rm -f NewsStudioAI_v02/workspace/auth.sqlite3*
+          find NewsStudioAI_v02/workspace/projects NewsStudioAI_v02/workspace/users -type f ! -name '.gitkeep' -delete 2>/dev/null || true
       - name: Create updated source archive
         shell: bash
         run: |
@@ -121,6 +131,33 @@ jobs:
           $bundledFfprobe = Get-ChildItem -Path 'dist\NewsStudioAI' -Filter 'ffprobe.exe' -Recurse | Select-Object -First 1
           if (-not $bundledFfmpeg) { throw 'Bundled ffmpeg.exe is missing from the application output.' }
           if (-not $bundledFfprobe) { throw 'Bundled ffprobe.exe is missing from the application output.' }
+      - name: Smoke test packaged Windows executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v02')
+          $ffmpeg = Get-ChildItem -Path 'dist\NewsStudioAI' -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem -Path 'dist\NewsStudioAI' -Filter 'ffprobe.exe' -Recurse | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) { throw 'Bundled FFmpeg tools are missing.' }
+          & $ffmpeg.FullName -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg.exe failed to execute.' }
+          & $ffprobe.FullName -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffprobe.exe failed to execute.' }
+          $process = Start-Process -FilePath (Join-Path (Get-Location) 'dist\NewsStudioAI\NewsStudioAI.exe') -ArgumentList '--server-only' -PassThru -WindowStyle Hidden
+          try {
+            $health = $null
+            for ($i = 0; $i -lt 30; $i++) {
+              $process.Refresh()
+              if ($process.HasExited) { throw 'Packaged NewsStudioAI.exe exited before its API became ready.' }
+              try { $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/health' -TimeoutSec 2; break } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $health) { throw 'Packaged NewsStudioAI.exe did not start its local API.' }
+            if (-not $health.ffmpeg -or -not $health.ffprobe) { throw 'Packaged application cannot locate bundled FFmpeg tools.' }
+            Write-Host "Packaged application health check passed. Version: $($health.version)"
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
       - name: Build Windows installer
         shell: pwsh
         run: |
