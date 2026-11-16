@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+installer-output/
+workspace/auth.sqlite3
+workspace/projects/*/originals/*
+workspace/projects/*/assets/*
+workspace/projects/*/renders/*
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+vendor/ffmpeg/

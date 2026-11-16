@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "locale": "fa-IR",
+  "direction": "rtl",
+  "transcription": {
+    "engine": "faster-whisper",
+    "device": "cpu",
+    "compute_type": "int8",
+    "default_model": "base",
+    "fallback_model": "tiny",
+    "quality_model": "small",
+    "batch_size": 1,
+    "max_concurrent_jobs": 1
+  },
+  "render": {
+    "video_codec": "libx264",
+    "preset": "veryfast",
+    "crf": 23,
+    "pixel_format": "yuv420p",
+    "audio_codec": "aac",
+    "audio_bitrate": "192k",
+    "max_resolution": "1080p",
+    "threads": 2
+  },
+  "audio": {
+    "denoise": "afftdn",
+    "normalization": "loudnorm",
+    "music_ducking": "sidechaincompress"
+  },
+  "security": {
+    "password_hash": "PBKDF2-HMAC-SHA256",
+    "session_days": 7,
+    "cookie_http_only": true,
+    "same_site": "strict"
+  }
+}
