@@ -210,4 +210,35 @@ patch(
     "- دریافت فایل خروجی از API\\n- آزمون دسترسی نقش‌ها و جلوگیری از ساخت پروژه توسط بازبین\\n- دانلود فایل SRT از API\\n- کنترل سلامت آرشیو و استخراج خودکار بسته سورس در GitHub Actions",
 )
 
+
+patch(
+    "app.py",
+    '''def rtl_text(draw,xy,text,font,fill,anchor="ra"):
+    try: draw.text(xy,text,font=font,fill=fill,anchor=anchor,direction="rtl",language="fa")
+    except Exception: draw.text(xy,text,font=font,fill=fill,anchor=anchor)
+''',
+    '''def rtl_text(draw,xy,text,font,fill,anchor="ra"):
+    try:
+        draw.text(xy,text,font=font,fill=fill,anchor=anchor,direction="rtl",language="fa")
+    except Exception:
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            shaped=get_display(arabic_reshaper.reshape(str(text)))
+            draw.text(xy,shaped,font=font,fill=fill,anchor=anchor)
+        except Exception:
+            draw.text(xy,text,font=font,fill=fill,anchor=anchor)
+''',
+)
+patch(
+    "requirements.txt",
+    "Pillow>=10.0",
+    "Pillow>=10.0\\narabic-reshaper>=3.0.0\\npython-bidi>=0.6.0",
+)
+patch(
+    "NewsStudioAI.spec",
+    '"webview", "clr_loader", "pythonnet")',
+    '"webview", "clr_loader", "pythonnet", "arabic_reshaper", "bidi")',
+)
+
 print("News Studio AI source patched to 0.2.1")
