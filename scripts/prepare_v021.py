@@ -164,41 +164,34 @@ for line in (".pytest_cache/", ".coverage", "htmlcov/", "vendor/ffmpeg/"):
 gitignore.write_text(git_text, encoding="utf-8")
 
 
-patch(
-    "README_FA.md",
-    '''## نصب روی Windows
-1. ZIP را در پوشه‌ای مانند \`C:\\NewsStudioAI\` استخراج کنید.
-2. Python 3.11 x64 و Microsoft Edge WebView2 Runtime را نصب کنید و گزینه Add Python to PATH را فعال کنید.
-3. FFmpeg و ffprobe را نصب و پوشه bin را به PATH اضافه کنید.
-4. \`run_windows.bat\` را اجرا کنید.
-5. مرورگر را در \`http://127.0.0.1:8765\` باز کنید.
-6. در اولین اجرا، حساب مدیر بسازید.
-7. برای فعال‌سازی تشخیص گفتار فارسی، برنامه را ببندید و \`install_ai.bat\` را اجرا کنید.
-
-''',
-    '''## نصب نسخه آماده Windows
-1. فایل \`NewsStudioAI_Setup_0.2.1.exe\` را از بخش Releases مخزن GitHub دریافت و اجرا کنید.
+readme_path = ROOT / "README_FA.md"
+readme_text = readme_path.read_text(encoding="utf-8")
+section_start = readme_text.index("## نصب روی Windows")
+section_end = readme_text.index("## سخت‌افزار", section_start)
+new_install = """## نصب نسخه آماده Windows
+1. فایل NewsStudioAI_Setup_0.2.1.exe را از بخش Releases مخزن GitHub دریافت و اجرا کنید.
 2. برنامه در پوشه کاربر نصب می‌شود و برای اجرای نسخه آماده به نصب جداگانه Python یا FFmpeg نیاز ندارد.
 3. در اولین اجرا حساب مدیر را بسازید.
 4. برای نمایش پنجره دسکتاپ، Microsoft Edge WebView2 Runtime لازم است؛ در صورت نبود آن، برنامه مرورگر پیش‌فرض را باز می‌کند.
 5. مدل Whisper در اولین استفاده از تشخیص گفتار فارسی دریافت می‌شود و ممکن است به اینترنت نیاز داشته باشد.
 
 ## اجرای نسخه سورس روی Windows
-1. پوشه \`NewsStudioAI_v02\` را از مخزن دریافت کنید.
+1. پوشه NewsStudioAI_v02 را از مخزن دریافت کنید.
 2. Python 3.11 x64 را نصب کنید و گزینه Add Python to PATH را فعال کنید.
-3. FFmpeg و ffprobe را نصب و پوشه bin را به PATH اضافه کنید؛ یا فایل‌های اجرایی آن‌ها را در \`vendor\\ffmpeg\\bin\` قرار دهید.
-4. \`run_windows.bat\` را اجرا کنید.
-5. مرورگر را در \`http://127.0.0.1:8765\` باز کنید.
+3. FFmpeg و ffprobe را نصب و پوشه bin را به PATH اضافه کنید؛ یا فایل‌های اجرایی آن‌ها را در vendor/ffmpeg/bin قرار دهید.
+4. run_windows.bat را اجرا کنید.
+5. مرورگر را در http://127.0.0.1:8765 باز کنید.
 6. در اولین اجرا، حساب مدیر بسازید.
-7. برای فعال‌سازی تشخیص گفتار فارسی، برنامه را ببندید و \`install_ai.bat\` را اجرا کنید.
+7. برای فعال‌سازی تشخیص گفتار فارسی، برنامه را ببندید و install_ai.bat را اجرا کنید.
 
-''',
+"""
+readme_text = readme_text[:section_start] + new_install + readme_text[section_end:]
+readme_text = readme_text.replace(
+    "ساخت نهایی EXE ویندوز باید روی خود ویندوز انجام شود؛ در محیط فعلی فقط اسکریپت و تنظیمات ساخت آماده شده‌اند.",
+    "ساخت EXE و Setup ویندوز در فرایند CI روی Windows x64 انجام می‌شود. بسته آماده شامل FFmpeg و ffprobe است.",
+    1,
 )
-patch(
-    "README_FA.md",
-    "ساخت نهایی EXE ویندوز باید روی خود ویندوز انجام شود؛ در محیط فعلی فقط اسکریپت و تنظیمات ساخت آماده شده‌اند. فایل‌های داده نسخه نصب‌شده در \`%LOCALAPPDATA%\\NewsStudioAI\\workspace\` ذخیره می‌شوند.",
-    "ساخت EXE و Setup ویندوز در فرایند CI روی Windows x64 انجام می‌شود. بسته آماده شامل FFmpeg و ffprobe است. فایل‌های داده نسخه نصب‌شده در \`%LOCALAPPDATA%\\NewsStudioAI\\workspace\` ذخیره می‌شوند.",
-)
+readme_path.write_text(readme_text, encoding="utf-8")
 patch(
     "docs/TEST_REPORT_FA.md",
     "آزمون‌های زیر در محیط لینوکسی ساخت، با FFmpeg و TestClient انجام شدند؛ بنابراین جایگزین آزمون نصب و اجرا روی ویندوز کاربر نیستند.",
@@ -207,7 +200,7 @@ patch(
 patch(
     "docs/TEST_REPORT_FA.md",
     "- دریافت فایل خروجی از API",
-    "- دریافت فایل خروجی از API\\n- آزمون دسترسی نقش‌ها و جلوگیری از ساخت پروژه توسط بازبین\\n- دانلود فایل SRT از API\\n- کنترل سلامت آرشیو و استخراج خودکار بسته سورس در GitHub Actions",
+    "- دریافت فایل خروجی از API\n- آزمون دسترسی نقش‌ها و جلوگیری از ساخت پروژه توسط بازبین\n- دانلود فایل SRT از API\n- کنترل سلامت آرشیو و استخراج خودکار بسته سورس در GitHub Actions",
 )
 
 
@@ -233,7 +226,7 @@ patch(
 patch(
     "requirements.txt",
     "Pillow>=10.0",
-    "Pillow>=10.0\\narabic-reshaper>=3.0.0\\npython-bidi>=0.6.0",
+    "Pillow>=10.0\narabic-reshaper>=3.0.0\npython-bidi>=0.6.0",
 )
 patch(
     "NewsStudioAI.spec",
