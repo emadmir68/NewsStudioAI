@@ -195,7 +195,7 @@ readme_path.write_text(readme_text, encoding="utf-8")
 patch(
     "docs/TEST_REPORT_FA.md",
     "آزمون‌های زیر در محیط لینوکسی ساخت، با FFmpeg و TestClient انجام شدند؛ بنابراین جایگزین آزمون نصب و اجرا روی ویندوز کاربر نیستند.",
-    "آزمون‌های خودکار نسخه 0.2.1 با Python، FastAPI TestClient و FFmpeg در محیط لینوکس اجرا شدند. این آزمون‌ها جایگزین آزمون نصب و اجرای نسخه نهایی روی سخت‌افزار واقعی Windows 10/11 نیستند.\\n\\nاجرای مجموعه آزمون: \`python -m pytest -q\` — نتیجه: 3 passed.",
+    "آزمون‌های خودکار نسخه 0.2.1 با Python، FastAPI TestClient و FFmpeg در محیط لینوکس اجرا شدند. این آزمون‌ها جایگزین آزمون نصب و اجرای نسخه نهایی روی سخت‌افزار واقعی Windows 10/11 نیستند.\n\nاجرای مجموعه آزمون: \`python -m pytest -q\` — نتیجه: 3 passed.",
 )
 patch(
     "docs/TEST_REPORT_FA.md",
