@@ -139,10 +139,14 @@ jobs:
           $ffmpeg = Get-ChildItem -Path 'dist\NewsStudioAI' -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
           $ffprobe = Get-ChildItem -Path 'dist\NewsStudioAI' -Filter 'ffprobe.exe' -Recurse | Select-Object -First 1
           if (-not $ffmpeg -or -not $ffprobe) { throw 'Bundled FFmpeg tools are missing.' }
-          & $ffmpeg.FullName -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg.exe failed to execute.' }
-          & $ffprobe.FullName -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffprobe.exe failed to execute.' }
+          $ffmpegVersion = & $ffmpeg.FullName -version 2>&1
+          $ffmpegExitCode = $LASTEXITCODE
+          if ($ffmpegExitCode -ne 0) { throw "Bundled ffmpeg.exe failed to execute: $ffmpegExitCode" }
+          Write-Host ($ffmpegVersion | Select-Object -First 1)
+          $ffprobeVersion = & $ffprobe.FullName -version 2>&1
+          $ffprobeExitCode = $LASTEXITCODE
+          if ($ffprobeExitCode -ne 0) { throw "Bundled ffprobe.exe failed to execute: $ffprobeExitCode" }
+          Write-Host ($ffprobeVersion | Select-Object -First 1)
           $process = Start-Process -FilePath (Join-Path (Get-Location) 'dist\NewsStudioAI\NewsStudioAI.exe') -ArgumentList '--server-only' -PassThru -WindowStyle Hidden
           try {
             $health = $null
