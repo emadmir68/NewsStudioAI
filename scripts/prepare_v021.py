@@ -163,4 +163,51 @@ for line in (".pytest_cache/", ".coverage", "htmlcov/", "vendor/ffmpeg/"):
         git_text += ("\n" if not git_text.endswith("\n") else "") + line + "\n"
 gitignore.write_text(git_text, encoding="utf-8")
 
+
+patch(
+    "README_FA.md",
+    '''## نصب روی Windows
+1. ZIP را در پوشه‌ای مانند \`C:\\NewsStudioAI\` استخراج کنید.
+2. Python 3.11 x64 و Microsoft Edge WebView2 Runtime را نصب کنید و گزینه Add Python to PATH را فعال کنید.
+3. FFmpeg و ffprobe را نصب و پوشه bin را به PATH اضافه کنید.
+4. \`run_windows.bat\` را اجرا کنید.
+5. مرورگر را در \`http://127.0.0.1:8765\` باز کنید.
+6. در اولین اجرا، حساب مدیر بسازید.
+7. برای فعال‌سازی تشخیص گفتار فارسی، برنامه را ببندید و \`install_ai.bat\` را اجرا کنید.
+
+''',
+    '''## نصب نسخه آماده Windows
+1. فایل \`NewsStudioAI_Setup_0.2.1.exe\` را از بخش Releases مخزن GitHub دریافت و اجرا کنید.
+2. برنامه در پوشه کاربر نصب می‌شود و برای اجرای نسخه آماده به نصب جداگانه Python یا FFmpeg نیاز ندارد.
+3. در اولین اجرا حساب مدیر را بسازید.
+4. برای نمایش پنجره دسکتاپ، Microsoft Edge WebView2 Runtime لازم است؛ در صورت نبود آن، برنامه مرورگر پیش‌فرض را باز می‌کند.
+5. مدل Whisper در اولین استفاده از تشخیص گفتار فارسی دریافت می‌شود و ممکن است به اینترنت نیاز داشته باشد.
+
+## اجرای نسخه سورس روی Windows
+1. پوشه \`NewsStudioAI_v02\` را از مخزن دریافت کنید.
+2. Python 3.11 x64 را نصب کنید و گزینه Add Python to PATH را فعال کنید.
+3. FFmpeg و ffprobe را نصب و پوشه bin را به PATH اضافه کنید؛ یا فایل‌های اجرایی آن‌ها را در \`vendor\\ffmpeg\\bin\` قرار دهید.
+4. \`run_windows.bat\` را اجرا کنید.
+5. مرورگر را در \`http://127.0.0.1:8765\` باز کنید.
+6. در اولین اجرا، حساب مدیر بسازید.
+7. برای فعال‌سازی تشخیص گفتار فارسی، برنامه را ببندید و \`install_ai.bat\` را اجرا کنید.
+
+''',
+)
+patch(
+    "README_FA.md",
+    "ساخت نهایی EXE ویندوز باید روی خود ویندوز انجام شود؛ در محیط فعلی فقط اسکریپت و تنظیمات ساخت آماده شده‌اند. فایل‌های داده نسخه نصب‌شده در \`%LOCALAPPDATA%\\NewsStudioAI\\workspace\` ذخیره می‌شوند.",
+    "ساخت EXE و Setup ویندوز در فرایند CI روی Windows x64 انجام می‌شود. بسته آماده شامل FFmpeg و ffprobe است. فایل‌های داده نسخه نصب‌شده در \`%LOCALAPPDATA%\\NewsStudioAI\\workspace\` ذخیره می‌شوند.",
+)
+patch(
+    "docs/TEST_REPORT_FA.md",
+    "آزمون‌های زیر در محیط لینوکسی ساخت، با FFmpeg و TestClient انجام شدند؛ بنابراین جایگزین آزمون نصب و اجرا روی ویندوز کاربر نیستند.",
+    "آزمون‌های خودکار نسخه 0.2.1 با Python، FastAPI TestClient و FFmpeg در محیط لینوکس اجرا شدند. این آزمون‌ها جایگزین آزمون نصب و اجرای نسخه نهایی روی سخت‌افزار واقعی Windows 10/11 نیستند.\\n\\nاجرای مجموعه آزمون: \`python -m pytest -q\` — نتیجه: 3 passed.",
+)
+patch(
+    "docs/TEST_REPORT_FA.md",
+    "- دریافت فایل خروجی از API",
+    "- دریافت فایل خروجی از API\\n- آزمون دسترسی نقش‌ها و جلوگیری از ساخت پروژه توسط بازبین\\n- دانلود فایل SRT از API\\n- کنترل سلامت آرشیو و استخراج خودکار بسته سورس در GitHub Actions",
+)
+
 print("News Studio AI source patched to 0.2.1")
