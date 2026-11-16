@@ -1,0 +1,55 @@
+name: Source audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'source_archive_parts/**'
+      - 'NewsStudioAI_v0.2.0_Windows_Source.tar.xz'
+      - '.github/workflows/source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  inspect-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Rebuild and validate source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import hashlib
+          parts = sorted(Path('source_archive_parts').glob('part*.b64'))
+          if len(parts) != 9:
+              raise SystemExit(f'Expected 9 parts, found {len(parts)}')
+          payload = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
+          raw = base64.b64decode(payload, validate=True)
+          if not raw.startswith(b'\xfd7zXZ\x00'):
+              raise SystemExit('Archive does not have XZ magic bytes')
+          Path('NewsStudioAI_v0.2.0_Windows_Source.tar.xz').write_bytes(raw)
+          print(f'Base64 chars: {len(payload)}')
+          print(f'Archive bytes: {len(raw)}')
+          print(f'SHA256: {hashlib.sha256(raw).hexdigest()}')
+          PY
+          xz -t NewsStudioAI_v0.2.0_Windows_Source.tar.xz
+          mkdir -p inspected_source
+          tar -xJf NewsStudioAI_v0.2.0_Windows_Source.tar.xz -C inspected_source
+          find inspected_source -type f -printf '%P\t%s bytes\n' | sort | tee source-inventory.txt
+          echo '--- File type counts ---' | tee -a source-inventory.txt
+          find inspected_source -type f | sed 's/.*\.//' | sort | uniq -c | tee -a source-inventory.txt
+          echo '--- Candidate build/test files ---' | tee -a source-inventory.txt
+          find inspected_source -type f \( -iname 'requirements*.txt' -o -iname 'pyproject.toml' -o -iname 'setup.py' -o -iname 'build_windows.bat' -o -iname '*.spec' -o -iname '*.iss' -o -iname '*test*' \) -printf '%P\n' | sort | tee -a source-inventory.txt
+      - name: Upload source audit artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: newsstudioai-source-audit
+          path: |
+            NewsStudioAI_v0.2.0_Windows_Source.tar.xz
+            source-inventory.txt
+          if-no-files-found: error
+          retention-days: 14
