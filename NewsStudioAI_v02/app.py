@@ -653,6 +653,9 @@ def update_animation_script(pid:str,data:dict,request:Request):
     script["analysis_model"]=old.get("analysis_model",script.get("analysis_model",""))
     script["frame_count"]=old.get("frame_count",script.get("frame_count",0))
     script["created_at"]=old.get("created_at",script.get("created_at",""))
+    script["source_transcript"]=old.get("source_transcript",[])
+    script["source_language"]=old.get("source_language","")
+    script["transcription_note"]=old.get("transcription_note","")
     d["animation_dubbing"]=script
     d["updated_at"]=datetime.now().isoformat(timespec="seconds")
     save_project(d)

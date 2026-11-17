@@ -88,6 +88,15 @@ if (-not (Test-Path (Join-Path $repo "app.py"))) {
     Remove-Item $zip -Force
 }
 
+# Disable the optional WeTextProcessing preload. Persian synthesis uses the model's own text normalizer.
+$mossAppPath = Join-Path $repo "app.py"
+$mossCode = Get-Content $mossAppPath -Raw
+$pattern = '(?m)^    text_normalizer_manager = SharedWeTextProcessingManager\(\)\r?\n    text_normalizer_manager\.start\(\)\r?\n    warmup_manager = WarmupManager\(runtime, text_normalizer_manager=text_normalizer_manager\)'
+$replacement = "    text_normalizer_manager = None" + [Environment]::NewLine + "    warmup_manager = WarmupManager(runtime, text_normalizer_manager=None)"
+$mossCode = [regex]::Replace($mossCode, $pattern, $replacement, 1)
+if ($mossCode -notmatch 'text_normalizer_manager = None') { throw "پچ سازگاری موتور صدای فارسی اعمال نشد." }
+Set-Content -Path $mossAppPath -Value $mossCode -Encoding utf8
+
 & $venvPython -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "به‌روزرسانی pip ناموفق بود." }
 
@@ -95,10 +104,13 @@ if ($LASTEXITCODE -ne 0) { throw "به‌روزرسانی pip ناموفق بو�
 & $venvPython -m pip install torch==2.7.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cpu
 if ($LASTEXITCODE -ne 0) { throw "نصب نسخه CPU کتابخانه PyTorch ناموفق بود." }
 
-& $venvPython -m pip install -r (Join-Path $repo "requirements.txt")
+# Exclude optional WeTextProcessing/Pynini and the CPU wheels already installed above.
+$requirementsPath = Join-Path $root "requirements-local-cpu.txt"
+Get-Content (Join-Path $repo "requirements.txt") | Where-Object { $_ -notmatch '^\s*(WeTextProcessing|pynini|torch|torchaudio)(\s|[<=>]|$)' } | Set-Content -Path $requirementsPath -Encoding utf8
+& $venvPython -m pip install -r $requirementsPath
 if ($LASTEXITCODE -ne 0) { throw "نصب وابستگی‌های موتور صدای فارسی ناموفق بود." }
 
-& $venvPython -m pip install -e $repo
+& $venvPython -m pip install --no-deps -e $repo
 if ($LASTEXITCODE -ne 0) { throw "نصب MOSS-TTS-Nano ناموفق بود." }
 
 Write-Host ""

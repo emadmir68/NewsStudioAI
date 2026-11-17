@@ -8,7 +8,7 @@ function renderAnimationDubbing() {
   summary.hidden = !d.summary;
   summary.innerHTML = d.summary
     ? "<b>" + esc(d.title || "خلاصه داستان") + "</b><br>" + esc(d.summary) +
-      "<br><small>صحنه‌ها: " + ((d.scenes || []).length) + " · شخصیت‌ها: " + chars.length + " · دیالوگ‌ها: " + lines.length + "</small>"
+      "<br><small>صحنه‌ها: " + ((d.scenes || []).length) + " · شخصیت‌ها: " + chars.length + " · دیالوگ‌ها: " + lines.length + (d.source_language ? " · زبان گفتار اصلی: " + esc(d.source_language) : "") + " · بخش‌های گفتار تشخیص‌داده‌شده: " + ((d.source_transcript || []).length) + "</small>"
     : "";
 
   $("animationCharacters").innerHTML = chars.map(ch => {

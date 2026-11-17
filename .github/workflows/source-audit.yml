@@ -238,8 +238,8 @@ jobs:
             - تحلیل محلی انیمیشن، تولید فیلمنامه فارسی، صداسازی شخصیت‌ها و میکس دوبله
             - آزمون‌های API، نقش‌ها، تشخیص سکوت، زیرنویس و رندر سه نسبت تصویر
           files: |
-            release_files/NewsStudioAI_Setup_0.2.1.exe
-            release_files/NewsStudioAI_0.2.1.exe
-            release_files/NewsStudioAI_Portable_0.2.1.zip
+            release_files/NewsStudioAI_Setup_0.3.0.exe
+            release_files/NewsStudioAI_0.3.0.exe
+            release_files/NewsStudioAI_Portable_0.3.0.zip
             release_files/NewsStudioAI_v0.3.0_Windows_Source.tar.xz
             release_files/SHA256SUMS.txt

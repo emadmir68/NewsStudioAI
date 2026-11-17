@@ -8,6 +8,7 @@ All media processing remains on the user's machine.
 from __future__ import annotations
 
 import base64
+import gc
 import json
 import math
 import mimetypes
@@ -144,7 +145,7 @@ def _extract_json(text: str) -> dict:
     raise ValueError("مدل پاسخ ساختاریافته و قابل‌خواندن تولید نکرد؛ دوباره تحلیل را اجرا کنید.")
 
 
-def extract_animation_frames(video: Path, frame_dir: Path, duration: float, ffmpeg: str, max_frames: int = 32) -> list[dict]:
+def extract_animation_frames(video: Path, frame_dir: Path, duration: float, ffmpeg: str, max_frames: int = 40) -> list[dict]:
     if not ffmpeg:
         raise RuntimeError("FFmpeg در دسترس نیست.")
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -168,6 +169,46 @@ def extract_animation_frames(video: Path, frame_dir: Path, duration: float, ffmp
     for index, path in enumerate(files):
         frames.append({"path": path, "time": min(safe_duration, index * interval)})
     return frames
+
+
+def transcribe_animation_audio(video: Path, progress: Callable[[int, str], None] | None = None) -> dict:
+    try:
+        from faster_whisper import WhisperModel
+    except Exception:
+        return {"language": "", "segments": [], "note": "موتور Whisper در این نصب در دسترس نیست."}
+    model = None
+    try:
+        if progress:
+            progress(5, "تشخیص گفتار اصلی و زبان ویدئو")
+        model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=2)
+        segments, info = model.transcribe(
+            str(video), task="transcribe", language=None, beam_size=1,
+            vad_filter=True, condition_on_previous_text=False,
+        )
+        found = []
+        for segment in segments:
+            text = str(getattr(segment, "text", "") or "").strip()
+            if not text:
+                continue
+            no_speech = float(getattr(segment, "no_speech_prob", 0.0) or 0.0)
+            avg_logprob = float(getattr(segment, "avg_logprob", 0.0) or 0.0)
+            if no_speech > 0.65 or avg_logprob < -1.5:
+                continue
+            found.append({
+                "start": round(max(0.0, float(segment.start)), 2),
+                "end": round(max(float(segment.start) + 0.1, float(segment.end)), 2),
+                "text": text[:500],
+            })
+            if len(found) >= 200:
+                break
+        language = str(getattr(info, "language", "") or "")
+        note = "" if found else "گفتار قابل‌اعتماد و قابل‌تشخیصی در صدای اصلی پیدا نشد."
+        return {"language": language, "segments": found, "note": note}
+    except Exception as exc:
+        return {"language": "", "segments": [], "note": "رونویسی صدای اصلی انجام نشد: " + str(exc)[:300]}
+    finally:
+        model = None
+        gc.collect()
 
 
 def _frame_observations(frames: list[dict], progress: Callable[[int, str], None] | None = None) -> list[str]:
@@ -286,13 +327,14 @@ def _sanitize_script(data: dict, duration: float) -> dict:
 
 def analyze_animation(video: Path, frame_dir: Path, duration: float, ffmpeg: str,
                       progress: Callable[[int, str], None] | None = None) -> dict:
+    transcript = transcribe_animation_audio(video, progress)
     frames = extract_animation_frames(video, frame_dir, duration, ffmpeg)
     if progress:
         progress(10, f"{len(frames)} فریم برای تحلیل آماده شد")
     observations = _frame_observations(frames, progress)
     prompt = (
         "بر اساس گزارش‌های مشاهده‌ای زیر که از فریم‌های زمان‌دار یک انیمیشن استخراج شده‌اند، "
-        "یک طرح دوبله کامل و منسجم به فارسی محاوره‌ای طبیعی ایران بنویس. "
+        "یک طرح دوبله کامل و منسجم به فارسی محاوره‌ای طبیعی ایران بنویس. اگر گفتار اصلی تشخیص داده شده، معنای آن را دقیق و وفادار حفظ کن و آن را به فارسی طبیعی بازنویسی کن؛ زمان‌های گفتار اصلی مرجع زمان‌بندی باشند. "
         "داستان را از ابتدا تا انتها دنبال کن. شخصیت‌های تکراری را یک شخصیت ثابت نگه دار. "
         "دیالوگ‌ها کوتاه، قابل اجرا، احساسی و متناسب با اتفاقات باشند. "
         "برای هر شخصیت صدای پیشنهادی متفاوت تعریف کن. "
@@ -305,13 +347,16 @@ def analyze_animation(video: Path, frame_dir: Path, duration: float, ffmpeg: str
         '"scenes":[{"id":"s1","start":0,"end":5,"description":"","mood":""}],'
         '"dialogues":[{"id":"d1","start":0.5,"end":3.5,"character_id":"c1","text":"","emotion":"","delivery":""}]} '
         f"مدت کل ویدئو: {duration:.2f} ثانیه. "
-        "گزارش فریم‌ها به ترتیب زمانی:\n" + "\n".join(observations)
+        "گفتار تشخیص‌داده‌شده از صدای اصلی (در صورت وجود، متن و زمان‌ها را مبنا قرار بده):\n" + "\n".join([f"{x['start']:.2f}-{x['end']:.2f}: {x['text']}" for x in transcript.get("segments", [])]) + "\n\nگزارش فریم‌ها به ترتیب زمانی:\n" + "\n".join(observations)
     )
     if progress:
         progress(68, "نوشتن فیلمنامه و دیالوگ‌های فارسی")
     content = _ollama_chat([{"role": "user", "content": prompt}], json_mode=True, timeout=900, keep_alive="0")
     script = _sanitize_script(_extract_json(content), duration)
     script["frame_count"] = len(frames)
+    script["source_transcript"] = transcript.get("segments", [])
+    script["source_language"] = transcript.get("language", "")
+    script["transcription_note"] = transcript.get("note", "")
     script["analysis_model"] = VISION_MODEL
     script["created_at"] = __import__("datetime").datetime.now().isoformat(timespec="seconds")
     if progress:
