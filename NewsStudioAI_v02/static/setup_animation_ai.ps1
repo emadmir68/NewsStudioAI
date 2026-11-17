@@ -101,14 +101,8 @@ if ($LASTEXITCODE -ne 0) { throw "نصب وابستگی‌های موتور صد
 & $venvPython -m pip install -e $repo
 if ($LASTEXITCODE -ne 0) { throw "نصب MOSS-TTS-Nano ناموفق بود." }
 
-$existing = Get-NetTCPConnection -LocalPort 18083 -State Listen -ErrorAction SilentlyContinue
-if (-not $existing) {
-    Write-Host "Starting local Persian TTS service..." -ForegroundColor Yellow
-    Start-Process -FilePath $venvPython -ArgumentList @("app.py","--device","cpu","--host","127.0.0.1","--port","18083") -WorkingDirectory $repo -WindowStyle Hidden
-}
-
 Write-Host ""
-Write-Host "Checking local AI services..." -ForegroundColor Yellow
+Write-Host "Checking visual model..." -ForegroundColor Yellow
 $visionReady = $false
 for ($i = 0; $i -lt 30; $i++) {
     try {
@@ -118,20 +112,8 @@ for ($i = 0; $i -lt 30; $i++) {
     } catch {}
     Start-Sleep -Seconds 2
 }
-$ttsReady = $false
-for ($i = 0; $i -lt 90; $i++) {
-    try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:18083/health" -TimeoutSec 3
-        $warm = Invoke-RestMethod -Uri "http://127.0.0.1:18083/api/warmup-status" -TimeoutSec 3
-        if ($health.status -eq "ok" -and $warm.ready) { $ttsReady = $true; break }
-    } catch {}
-    Start-Sleep -Seconds 2
-}
-
 Write-Host ""
 if ($visionReady) { Write-Host "Visual analysis model: READY" -ForegroundColor Green } else { Write-Host "Visual analysis model: check Ollama" -ForegroundColor Yellow }
-if ($ttsReady) { Write-Host "Persian voice engine: READY" -ForegroundColor Green } else { Write-Host "Persian voice engine is still downloading/loading. Wait a few minutes and check again in News Studio AI." -ForegroundColor Yellow }
-Write-Host ""
+Write-Host "Persian TTS runtime installed. It will start automatically when you click 'تولید صدای شخصیت‌ها'." -ForegroundColor Green
+Write-Host "The Persian speech model downloads on first use. First model downloads require internet; processing is local after setup."
 Write-Host "Setup finished. Open News Studio AI and press 'بررسی موتورهای هوشمند'." -ForegroundColor Cyan
-Write-Host "First model downloads require internet. Processing is local after setup."
-Write-Host "

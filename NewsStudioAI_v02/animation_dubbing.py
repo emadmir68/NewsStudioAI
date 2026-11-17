@@ -11,8 +11,10 @@ import base64
 import json
 import math
 import mimetypes
+import os
 import re
 import subprocess
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -65,6 +67,7 @@ def moss_tts_status() -> dict:
         return {
             "available": True,
             "ready": ready,
+            "failed": bool(warm.get("failed")),
             "message": "موتور صدای فارسی آماده است." if ready else str(warm.get("status_text") or warm.get("message") or "موتور صدا در حال آماده‌سازی است."),
         }
     except Exception:
@@ -75,12 +78,48 @@ def moss_tts_status() -> dict:
         }
 
 
-def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int = 600) -> str:
+def ensure_moss_tts_service(progress: Callable[[int, str], None] | None = None, timeout: int = 1800) -> None:
+    status = moss_tts_status()
+    if status.get("ready"):
+        return
+    process = None
+    if not status.get("available"):
+        root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NewsStudioAI" / "animation-ai"
+        python = root / "venv" / "Scripts" / "python.exe"
+        repo = root / "MOSS-TTS-Nano"
+        if not python.is_file() or not (repo / "app.py").is_file():
+            raise RuntimeError("موتور صدای فارسی نصب نشده است. ابتدا اسکریپت نصب موتورهای هوشمند را اجرا کنید.")
+        log_dir = root / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "moss-tts.log"
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        with log_path.open("ab") as log:
+            process = subprocess.Popen(
+                [str(python), "app.py", "--device", "cpu", "--host", "127.0.0.1", "--port", "18083"],
+                cwd=str(repo), stdout=log, stderr=log, creationflags=flags,
+            )
+    started = time.time()
+    while time.time() - started < timeout:
+        status = moss_tts_status()
+        if status.get("ready"):
+            return
+        if status.get("failed"):
+            raise RuntimeError(status.get("message") or "موتور صدای فارسی هنگام آماده‌سازی خطا داد.")
+        if process is not None and process.poll() is not None:
+            raise RuntimeError("موتور صدای فارسی متوقف شد. گزارش خطا در پوشه LocalAppData\\\\NewsStudioAI\\\\animation-ai\\\\logs قرار دارد.")
+        elapsed = int(time.time() - started)
+        if progress:
+            progress(min(28, 4 + int(24 * elapsed / max(1, timeout))), status.get("message") or "در حال بارگذاری مدل صدای فارسی")
+        time.sleep(3)
+    raise RuntimeError("آماده‌سازی موتور صدای فارسی بیش از حد طول کشید. اتصال اینترنت و گزارش خطا را بررسی کنید.")
+
+
+def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int = 600, keep_alive: str = "10m") -> str:
     payload: dict[str, Any] = {
         "model": VISION_MODEL,
         "messages": messages,
         "stream": False,
-        "keep_alive": "10m",
+        "keep_alive": keep_alive,
         "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": 4096},
     }
     if json_mode:
@@ -198,7 +237,7 @@ def _sanitize_script(data: dict, duration: float) -> dict:
         if not text:
             continue
         try:
-            start = max(0.0, min(duration, float(item.get("start", 0))))
+            start = max(0.0, min(max(0.0, duration - 0.25), float(item.get("start", 0))))
         except Exception:
             start = 0.0
         try:
@@ -270,7 +309,7 @@ def analyze_animation(video: Path, frame_dir: Path, duration: float, ffmpeg: str
     )
     if progress:
         progress(68, "نوشتن فیلمنامه و دیالوگ‌های فارسی")
-    content = _ollama_chat([{"role": "user", "content": prompt}], json_mode=True, timeout=900)
+    content = _ollama_chat([{"role": "user", "content": prompt}], json_mode=True, timeout=900, keep_alive="0")
     script = _sanitize_script(_extract_json(content), duration)
     script["frame_count"] = len(frames)
     script["analysis_model"] = VISION_MODEL

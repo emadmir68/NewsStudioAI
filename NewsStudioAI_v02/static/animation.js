@@ -77,9 +77,9 @@ async function loadAnimationDubbing() {
     const tts = status.tts || {};
     $("visionAIStatus").textContent = vision.model_ready ? "آماده · " + vision.model : (vision.available ? "Ollama فعال؛ مدل نصب نیست" : "Ollama اجرا نیست");
     $("visionAIStatus").style.color = vision.model_ready ? "#6ed4ac" : "#e6b76c";
-    $("ttsAIStatus").textContent = tts.ready ? "آماده · صدای فارسی" : (tts.available ? "در حال آماده‌سازی" : "نصب نشده");
+    $("ttsAIStatus").textContent = tts.ready ? "آماده · صدای فارسی" : (tts.available ? "در حال آماده‌سازی" : "خاموش؛ هنگام تولید روشن می‌شود");
     $("ttsAIStatus").style.color = tts.ready ? "#6ed4ac" : "#e6b76c";
-    $("animationAIHelp").textContent = "تحلیل تصویر: " + (vision.message || "—") + " | تولید صدا: " + (tts.message || "—") + " برای اجرای کامل، هر دو موتور محلی باید آماده باشند.";
+    $("animationAIHelp").textContent = "تحلیل تصویر: " + (vision.message || "—") + " | تولید صدا: " + (tts.message || "—") + " موتور صدای فارسی هنگام شروع تولید صدا به‌صورت خودکار روشن می‌شود.";
     $("analyzeAnimation").disabled = !project.source || !vision.model_ready;
     $("generateAnimationAudio").disabled = !(animationDubbing.dialogues || []).length || !tts.ready;
     renderAnimationDubbing();

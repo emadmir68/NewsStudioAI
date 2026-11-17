@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from animation_dubbing import ollama_status, moss_tts_status, ensure_moss_tts_service, analyze_animation, generate_voice_tracks, render_dubbed_video, _sanitize_script
 from pydantic import BaseModel
 
 try:
@@ -25,7 +26,7 @@ AUTH_DB = WORKSPACE / "auth.sqlite3"
 STATIC_DIR = RESOURCE_DIR / "static"
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE.mkdir(parents=True, exist_ok=True)
-app = FastAPI(title="News Studio AI", version="0.2.1", docs_url=None, redoc_url=None)
+app = FastAPI(title="News Studio AI", version="0.3.0", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
@@ -177,7 +178,12 @@ def health():
     except Exception: whisper=False
     try: import PIL; pillow=True
     except Exception: pillow=False
-    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"version":"0.2.1"}
+    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"version":"0.3.0"}
+
+@app.get("/api/animation-ai/status")
+def animation_ai_status():
+    return {"vision":ollama_status(),"tts":moss_tts_status(),"free_local":True}
+
 
 @app.get("/api/auth/status")
 def auth_status(request:Request):
@@ -586,6 +592,161 @@ def render_worker(jid,pid,profile):
         set_job(jid,status="completed",progress=100,message="رندر با موفقیت انجام شد",result={"filename":outname,"url":f"/outputs/{pid}/{outname}"})
     except subprocess.TimeoutExpired: set_job(jid,status="failed",progress=100,message="زمان رندر به پایان رسید")
     except Exception as e: set_job(jid,status="failed",progress=100,message=str(e))
+
+
+@app.get("/api/projects/{pid}/animation-dubbing")
+def get_animation_dubbing(pid:str):
+    d=load_project(pid)
+    return d.get("animation_dubbing") or {"status":"empty","characters":[],"scenes":[],"dialogues":[]}
+
+@app.post("/api/projects/{pid}/animation-dubbing/analyze")
+def start_animation_analysis(pid:str,request:Request,background:BackgroundTasks):
+    role(request,("admin","editor"))
+    d=load_project(pid)
+    if not d.get("source"):
+        raise HTTPException(400,"ابتدا فایل انیمیشن را وارد کنید.")
+    duration=float(d.get("source",{}).get("duration") or 0)
+    if duration<=0:
+        raise HTTPException(400,"مدت ویدئو قابل تشخیص نیست.")
+    if duration>600:
+        raise HTTPException(400,"در نسخه فعلی، تحلیل خودکار برای ویدئوهای حداکثر ۱۰ دقیقه فعال است.")
+    status=ollama_status()
+    if not status.get("available"):
+        raise HTTPException(424,"برای تحلیل تصویری رایگان، ابتدا Ollama را نصب و اجرا کنید.")
+    if not status.get("model_ready"):
+        raise HTTPException(424,f"مدل {status.get('model')} نصب نیست. اسکریپت نصب موتورهای هوشمند را اجرا کنید.")
+    jid=new_job("animation_analysis",pid)
+    background.add_task(animation_analysis_worker,jid,pid)
+    return {"job_id":jid}
+
+def animation_analysis_worker(jid,pid):
+    try:
+        d=load_project(pid)
+        src=media_file(pid,d["source"]["filename"])
+        frames_dir=pdir(pid)/"assets"/"animation_frames"
+        def progress(value,message): set_job(jid,progress=value,message=message,status="running")
+        set_job(jid,status="running",progress=3,message="شروع تحلیل انیمیشن")
+        result=analyze_animation(src,frames_dir,float(d["source"].get("duration") or 0),ffmpeg(),progress)
+        d["animation_dubbing"]=result
+        d["updated_at"]=datetime.now().isoformat(timespec="seconds")
+        save_project(d)
+        set_job(jid,status="completed",progress=100,message="تحلیل و فیلمنامه فارسی آماده شد",result={
+            "characters":len(result.get("characters",[])),
+            "scenes":len(result.get("scenes",[])),
+            "dialogues":len(result.get("dialogues",[])),
+        })
+    except Exception as e:
+        set_job(jid,status="failed",progress=100,message=str(e))
+
+@app.put("/api/projects/{pid}/animation-dubbing/script")
+def update_animation_script(pid:str,data:dict,request:Request):
+    role(request,("admin","editor"))
+    d=load_project(pid)
+    if not d.get("source"):
+        raise HTTPException(400,"ابتدا انیمیشن را وارد کنید.")
+    old=d.get("animation_dubbing") or {}
+    script=_sanitize_script(data,float(d["source"].get("duration") or 0))
+    old_chars={str(x.get("id")):x for x in old.get("characters",[])}
+    for character in script.get("characters",[]):
+        previous=old_chars.get(character["id"],{})
+        character["voice_reference"]=previous.get("voice_reference","")
+    script["analysis_model"]=old.get("analysis_model",script.get("analysis_model",""))
+    script["frame_count"]=old.get("frame_count",script.get("frame_count",0))
+    script["created_at"]=old.get("created_at",script.get("created_at",""))
+    d["animation_dubbing"]=script
+    d["updated_at"]=datetime.now().isoformat(timespec="seconds")
+    save_project(d)
+    return script
+
+@app.post("/api/projects/{pid}/animation-dubbing/voice/{character_id}")
+async def upload_animation_voice(pid:str,character_id:str,request:Request,file:UploadFile=File(...)):
+    role(request,("admin","editor"))
+    d=load_project(pid)
+    script=d.get("animation_dubbing") or {}
+    characters=script.get("characters",[])
+    character=next((x for x in characters if str(x.get("id"))==character_id),None)
+    if not character:
+        raise HTTPException(404,"شخصیت موردنظر پیدا نشد.")
+    suffix=Path(file.filename or "").suffix.lower()
+    if suffix not in (".wav",".mp3",".m4a",".flac",".ogg"):
+        raise HTTPException(400,"نمونه صدا باید WAV، MP3، M4A، FLAC یا OGG باشد.")
+    folder=asset_dir(pid)
+    name=f"voice_{re.sub(r'[^a-zA-Z0-9_-]','_',character_id)[:24]}_{uuid.uuid4().hex[:8]}{suffix}"
+    dest=folder/name
+    await save_upload(file,dest,30*1024*1024)
+    if ffprobe():
+        try:
+            p=subprocess.run([ffprobe(),"-v","error","-select_streams","a","-show_entries","stream=codec_type","-of","csv=p=0",str(dest)],capture_output=True,text=True,timeout=30)
+            if p.returncode or "audio" not in (p.stdout or "").lower():
+                dest.unlink(missing_ok=True)
+                raise HTTPException(400,"فایل بارگذاری‌شده صدای معتبر ندارد.")
+        except HTTPException: raise
+        except Exception:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(400,"بررسی فایل نمونه صدا ناموفق بود.")
+    character["voice_reference"]=name
+    d["animation_dubbing"]=script
+    d["updated_at"]=datetime.now().isoformat(timespec="seconds")
+    save_project(d)
+    return {"ok":True,"character_id":character_id,"voice_reference":name}
+
+@app.post("/api/projects/{pid}/animation-dubbing/generate-audio")
+def start_animation_audio(pid:str,request:Request,background:BackgroundTasks):
+    role(request,("admin","editor"))
+    d=load_project(pid)
+    script=d.get("animation_dubbing") or {}
+    if not script.get("dialogues"):
+        raise HTTPException(400,"ابتدا انیمیشن را تحلیل و فیلمنامه را آماده کنید.")
+    used_ids={str(x.get("character_id") or "") for x in script.get("dialogues",[])}
+    missing=[x.get("name") or x.get("id") for x in script.get("characters",[]) if str(x.get("id")) in used_ids and not x.get("voice_reference")]
+    if missing:
+        raise HTTPException(400,"برای این شخصیت‌ها نمونه صدای مرجع بارگذاری نشده است: "+ "، ".join(missing))
+    jid=new_job("animation_tts",pid)
+    background.add_task(animation_audio_worker,jid,pid)
+    return {"job_id":jid}
+
+def animation_audio_worker(jid,pid):
+    try:
+        d=load_project(pid)
+        script=d.get("animation_dubbing") or {}
+        def progress(value,message): set_job(jid,progress=value,message=message,status="running")
+        set_job(jid,status="running",progress=2,message="راه‌اندازی موتور صدای فارسی")
+        ensure_moss_tts_service(progress)
+        script=generate_voice_tracks(pdir(pid),script,progress)
+        d["animation_dubbing"]=script
+        d["updated_at"]=datetime.now().isoformat(timespec="seconds")
+        save_project(d)
+        set_job(jid,status="completed",progress=100,message="صداهای فارسی شخصیت‌ها ساخته شد",result={"dialogues":len(script.get("dialogues",[]))})
+    except Exception as e:
+        set_job(jid,status="failed",progress=100,message=str(e))
+
+@app.post("/api/projects/{pid}/animation-dubbing/render")
+def start_animation_dub_render(pid:str,request:Request,background:BackgroundTasks,keep_original_audio:bool=False):
+    role(request,("admin","editor"))
+    d=load_project(pid)
+    if not d.get("source"):
+        raise HTTPException(400,"فایل اصلی پیدا نشد.")
+    if not (d.get("animation_dubbing") or {}).get("dialogues"):
+        raise HTTPException(400,"فیلمنامه دوبله وجود ندارد.")
+    jid=new_job("animation_dub_render",pid)
+    background.add_task(animation_dub_render_worker,jid,pid,keep_original_audio)
+    return {"job_id":jid}
+
+def animation_dub_render_worker(jid,pid,keep_original_audio):
+    try:
+        d=load_project(pid)
+        source=media_file(pid,d["source"]["filename"])
+        duration=float(d["source"].get("duration") or 0)
+        outdir=pdir(pid)/"renders"
+        filename=f"NewsStudioAI_Dubbed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+        output_path=outdir/filename
+        set_job(jid,status="running",progress=10,message="ترکیب دیالوگ‌ها و صدای اصلی")
+        result=render_dubbed_video(pdir(pid),source,d["animation_dubbing"],output_path,ffmpeg(),ffprobe(),duration,keep_original_audio)
+        set_job(jid,status="completed",progress=100,message="ویدئوی دوبله‌شده آماده است",result={
+            "filename":filename,"url":f"/outputs/{pid}/{filename}","warnings":result.get("warnings",[])
+        })
+    except Exception as e:
+        set_job(jid,status="failed",progress=100,message=str(e))
 
 @app.get("/api/jobs/{jid}")
 def job(jid:str): return get_job(jid)

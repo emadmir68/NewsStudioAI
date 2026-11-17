@@ -1,9 +1,9 @@
-name: Test and build Windows release
+name: Test and build Windows release v0.3.0
 on:
   push:
     branches: [main]
     paths:
-      - 'NewsStudioAI_v0.2.0_Windows_Source.tar.xz'
+      - 'NewsStudioAI_v0.3.0_Windows_Source.tar.xz'
       - 'scripts/prepare_v021.py'
       - '.github/workflows/source-audit.yml'
       - 'NewsStudioAI_v02/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: newsstudioai-v0.2.1-release
+  group: newsstudioai-v0.3.0-release
   cancel-in-progress: true
 jobs:
   source-audit:
@@ -27,13 +27,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-      - name: Extract and patch source
+      - name: Validate committed source tree
         shell: bash
         run: |
           set -euo pipefail
-          xz -t NewsStudioAI_v0.2.0_Windows_Source.tar.xz
-          tar -xJf NewsStudioAI_v0.2.0_Windows_Source.tar.xz -C .
-          python scripts/prepare_v021.py
+          test -f NewsStudioAI_v02/app.py
+          test -f NewsStudioAI_v02/animation_dubbing.py
+          test -f NewsStudioAI_v02/static/animation.js
           find NewsStudioAI_v02 -type f -not -path '*/.pytest_cache/*' -printf '%P\t%s bytes\n' | sort | tee source-inventory.txt
       - name: Install test dependencies
         working-directory: NewsStudioAI_v02
@@ -43,8 +43,9 @@ jobs:
       - name: Run source checks and integration tests
         working-directory: NewsStudioAI_v02
         run: |
-          python -m compileall -q app.py launcher.py tests
+          python -m compileall -q app.py launcher.py animation_dubbing.py tests
           node --check static/app.js
+          node --check static/animation.js
           python -m pytest -q
       - name: Remove test caches and local database
         shell: bash
@@ -56,20 +57,9 @@ jobs:
       - name: Create updated source archive
         shell: bash
         run: |
-          tar --exclude='*/.venv' --exclude='*/__pycache__' --exclude='*/.pytest_cache' --exclude='*.pyc' --exclude='*/workspace/auth.sqlite3*' --exclude='*/build' --exclude='*/dist' --exclude='*/installer-output' --exclude='*/vendor/ffmpeg' -cJf NewsStudioAI_v0.2.1_Windows_Source.tar.xz NewsStudioAI_v02
+          tar --exclude='*/.venv' --exclude='*/__pycache__' --exclude='*/.pytest_cache' --exclude='*.pyc' --exclude='*/workspace/auth.sqlite3*' --exclude='*/build' --exclude='*/dist' --exclude='*/installer-output' --exclude='*/vendor/ffmpeg' -cJf NewsStudioAI_v0.3.0_Windows_Source.tar.xz NewsStudioAI_v02
           xz -t NewsStudioAI_v0.2.1_Windows_Source.tar.xz
           sha256sum NewsStudioAI_v0.2.1_Windows_Source.tar.xz
-      - name: Publish unpacked source in the repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add NewsStudioAI_v02
-          if ! git diff --cached --quiet; then
-            git commit -m 'Publish unpacked News Studio AI v0.2.1 source [skip ci]'
-            git push origin HEAD:main
-          fi
       - name: Upload tested source package
         uses: actions/upload-artifact@v4
         with:
@@ -199,7 +189,7 @@ jobs:
           $compiler = @('C:\Program Files (x86)\Inno Setup 6\ISCC.exe','C:\Program Files\Inno Setup 6\ISCC.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $compiler) { throw 'Inno Setup compiler was not found after installation.' }
           & $compiler 'installer\NewsStudioAI.iss'
-          if (-not (Test-Path 'installer-output\NewsStudioAI_Setup_0.2.1.exe')) { throw 'Inno Setup did not produce the installer.' }
+          if (-not (Test-Path 'installer-output\NewsStudioAI_Setup_0.3.0.exe')) { throw 'Inno Setup did not produce the installer.' }
       - name: Prepare release files
         shell: pwsh
         run: |
@@ -208,8 +198,8 @@ jobs:
           $release = Join-Path $env:GITHUB_WORKSPACE 'release_output'
           New-Item -ItemType Directory -Path $release -Force | Out-Null
           Copy-Item 'installer-output\NewsStudioAI_Setup_0.2.1.exe' $release
-          Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.2.1.exe')
-          Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.2.1.zip') -CompressionLevel Optimal
+          Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.3.0.exe')
+          Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.3.0.zip') -CompressionLevel Optimal
           Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.2.1_Windows_Source.tar.xz') $release
           Get-ChildItem $release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Set-Content (Join-Path $release 'SHA256SUMS.txt')
       - name: Upload Windows release files
@@ -232,19 +222,20 @@ jobs:
       - name: Publish public GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.1
+          tag_name: v0.3.0
           target_commitish: main
-          name: News Studio AI v0.2.1
+          name: News Studio AI v0.3.0
           generate_release_notes: true
           overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true
           body: |
-            نسخه 0.2.1 استودیوی تدوین خبر با رابط فارسی.
+            نسخه 0.3.0 استودیوی تدوین خبر با رابط فارسی و دوبله هوشمند انیمیشن.
             
             - نصب‌کننده Windows x64 با FFmpeg و ffprobe همراه
             - نسخه Portable
             - بسته کامل سورس
+            - تحلیل محلی انیمیشن، تولید فیلمنامه فارسی، صداسازی شخصیت‌ها و میکس دوبله
             - آزمون‌های API، نقش‌ها، تشخیص سکوت، زیرنویس و رندر سه نسبت تصویر
           files: |
             release_files/NewsStudioAI_Setup_0.2.1.exe
