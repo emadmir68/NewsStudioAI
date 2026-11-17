@@ -197,7 +197,7 @@ jobs:
           Set-Location (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v02')
           $release = Join-Path $env:GITHUB_WORKSPACE 'release_output'
           New-Item -ItemType Directory -Path $release -Force | Out-Null
-          Copy-Item 'installer-output\NewsStudioAI_Setup_0.2.1.exe' $release
+          Copy-Item 'installer-output\NewsStudioAI_Setup_0.3.0.exe' $release
           Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.3.0.exe')
           Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.3.0.zip') -CompressionLevel Optimal
           Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.3.0_Windows_Source.tar.xz') $release
