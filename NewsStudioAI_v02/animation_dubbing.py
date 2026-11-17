@@ -426,9 +426,7 @@ def render_dubbed_video(project_dir: Path, source: Path, script: dict, output_pa
         # Fallback for containers/codecs that cannot be muxed directly into MP4.
         retry = base_cmd.copy()
         video_codec = retry.index("-c:v") + 1
-        retry[video_codec] = "libx264"
-        retry[retry.index("copy")] = "veryfast"
-        retry += ["-crf", "20", "-pix_fmt", "yuv420p"]
+        retry[video_codec:video_codec + 1] = ["libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
         run = subprocess.run(retry, capture_output=True, text=True, timeout=7200)
     if run.returncode:
         raise RuntimeError("رندر دوبله ناموفق بود: " + (run.stderr or "")[-1800:])
