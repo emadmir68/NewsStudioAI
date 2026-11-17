@@ -29,26 +29,3 @@ footer{display:flex;justify-content:space-between;color:#627991;font-size:9px;pa
 .preview-lower{position:absolute;right:3%;left:3%;bottom:13%;padding:3% 4%;border-radius:8px;background:rgba(15,35,53,.9);display:flex;flex-direction:column;gap:5px;text-align:right}
 .preview-lower b{font-size:clamp(9px,2vw,16px)}.preview-lower strong{color:#70d9dc;font-size:clamp(8px,1.6vw,13px)}.preview-lower small{color:#dbe7ef;font-size:clamp(7px,1.2vw,11px)}
 .preview-ticker{position:absolute;bottom:0;right:0;left:0;background:#0d2233;color:white;white-space:nowrap;overflow:hidden;padding:7px 10px;font-size:clamp(7px,1.4vw,11px);text-align:right}.preview-ticker span{display:inline-block;min-width:max-content;animation:newsTicker 12s linear infinite}@keyframes newsTicker{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}
-
-
-/* AI animation dubbing studio */
-.animation-panel{border-color:#3b6576;background:linear-gradient(145deg,#132637,#101c2a)}
-.animation-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
-.status-tile{display:flex;flex-direction:column;gap:6px;background:#0b1723;border:1px solid #2a455a;border-radius:9px;padding:10px}
-.status-tile b{font-size:10px;color:#8fa8bc}.status-tile span{font-size:11px;color:#e2edf5}
-.animation-summary{margin:12px 0;padding:12px;background:#0b1723;border:1px solid #29485d;border-radius:9px;color:#d6e5ee;font-size:11px;line-height:1.9}
-.animation-summary b{color:#7ad7d0}
-.animation-subhead{display:flex;flex-direction:column;gap:4px;margin:17px 0 8px}
-.animation-subhead b{font-size:12px;color:#e9f3fa}.animation-subhead small{font-size:9px;color:#829bb0}
-.animation-characters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.animation-character{background:#0b1723;border:1px solid #2a4055;border-radius:9px;padding:10px;display:grid;gap:7px}
-.animation-character strong{font-size:11px;color:#70d4d0}.animation-character p{font-size:9px;color:#9eb2c3;line-height:1.7;margin:0}
-.animation-character .voice-state{font-size:9px;color:#e2b977}
-.animation-character input[type=file]{display:none}
-.animation-character .btn{justify-self:start;font-size:9px;padding:6px 9px}
-.animation-script-table{min-width:760px}
-.animation-script-table td input,.animation-script-table td select{width:100%;min-width:76px;background:#0b1520;border:1px solid #2c4055;color:#eef4fa;border-radius:5px;padding:6px;font-size:10px}
-.animation-script-table td .dub-text{min-width:260px;direction:rtl}
-.animation-render-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-top:12px}
-.animation-render-row .render-btn{margin:0}
-@media(max-width:760px){.animation-status-grid,.animation-characters,.animation-render-row{grid-template-columns:1fr}.animation-panel .button-row{flex-wrap:wrap}}
