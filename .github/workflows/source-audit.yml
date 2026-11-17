@@ -58,15 +58,15 @@ jobs:
         shell: bash
         run: |
           tar --exclude='*/.venv' --exclude='*/__pycache__' --exclude='*/.pytest_cache' --exclude='*.pyc' --exclude='*/workspace/auth.sqlite3*' --exclude='*/build' --exclude='*/dist' --exclude='*/installer-output' --exclude='*/vendor/ffmpeg' -cJf NewsStudioAI_v0.3.0_Windows_Source.tar.xz NewsStudioAI_v02
-          xz -t NewsStudioAI_v0.2.1_Windows_Source.tar.xz
-          sha256sum NewsStudioAI_v0.2.1_Windows_Source.tar.xz
+          xz -t NewsStudioAI_v0.3.0_Windows_Source.tar.xz
+          sha256sum NewsStudioAI_v0.3.0_Windows_Source.tar.xz
       - name: Upload tested source package
         uses: actions/upload-artifact@v4
         with:
           name: newsstudioai-source-package
           path: |
             NewsStudioAI_v02/
-            NewsStudioAI_v0.2.1_Windows_Source.tar.xz
+            NewsStudioAI_v0.3.0_Windows_Source.tar.xz
             source-inventory.txt
           if-no-files-found: error
           retention-days: 14
@@ -200,7 +200,7 @@ jobs:
           Copy-Item 'installer-output\NewsStudioAI_Setup_0.2.1.exe' $release
           Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.3.0.exe')
           Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.3.0.zip') -CompressionLevel Optimal
-          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.2.1_Windows_Source.tar.xz') $release
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.3.0_Windows_Source.tar.xz') $release
           Get-ChildItem $release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Set-Content (Join-Path $release 'SHA256SUMS.txt')
       - name: Upload Windows release files
         uses: actions/upload-artifact@v4
@@ -241,5 +241,5 @@ jobs:
             release_files/NewsStudioAI_Setup_0.2.1.exe
             release_files/NewsStudioAI_0.2.1.exe
             release_files/NewsStudioAI_Portable_0.2.1.zip
-            release_files/NewsStudioAI_v0.2.1_Windows_Source.tar.xz
+            release_files/NewsStudioAI_v0.3.0_Windows_Source.tar.xz
             release_files/SHA256SUMS.txt
