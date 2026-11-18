@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from animation_dubbing import ollama_status, moss_tts_status, ensure_moss_tts_service, analyze_animation, generate_voice_tracks, render_dubbed_video, _sanitize_script
 from pydantic import BaseModel
-from hardware_profile import recommended_profile
+from hardware_profile import recommended_profile, available_ram_gb
 
 try:
     import sys
@@ -33,6 +33,7 @@ JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 COOKIE = "newsstudio_session"
 MAX_UPLOAD = 4 * 1024 * 1024 * 1024
+AI_MIN_FREE_RAM_GB = 5.5
 
 def db():
     c=sqlite3.connect(AUTH_DB, timeout=20); c.row_factory=sqlite3.Row; return c
@@ -171,7 +172,13 @@ class CommentIn(BaseModel): body:str
 class ReviewIn(BaseModel): status:str
 
 @app.get("/",response_class=HTMLResponse)
-def index(): return FileResponse(STATIC_DIR/"index.html")
+def index(): return FileResponse(STATIC_DIR/"safe.html")
+
+@app.get("/simple",response_class=HTMLResponse)
+def simple_home(): return FileResponse(STATIC_DIR/"safe.html")
+
+@app.get("/advanced",response_class=HTMLResponse)
+def advanced_home(): return FileResponse(STATIC_DIR/"index.html")
 
 @app.get("/api/health")
 def health():
@@ -179,7 +186,7 @@ def health():
     except Exception: whisper=False
     try: import PIL; pillow=True
     except Exception: pillow=False
-    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"version":"0.3.1"}
+    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"available_ram_gb":available_ram_gb(),"version":"safe-preview"}
 
 @app.get("/api/animation-ai/status")
 def animation_ai_status():
@@ -347,15 +354,31 @@ def media(pid:str,filename:str): return FileResponse(media_file(pid,filename))
 def asset(pid:str,filename:str): return FileResponse(child_file(pdir(pid)/"assets",filename))
 
 def set_job(jid,**kwargs):
-    with JOBS_LOCK: JOBS.setdefault(jid,{}).update(kwargs)
+    with JOBS_LOCK:
+        state=JOBS.setdefault(jid,{})
+        if state.get("status")=="cancelled": return
+        state.update(kwargs)
 def get_job(jid):
     with JOBS_LOCK:
         if jid not in JOBS: raise HTTPException(404,"کار پیدا نشد")
         return dict(JOBS[jid])
+def assert_memory_budget():
+    free=available_ram_gb()
+    if free and free < AI_MIN_FREE_RAM_GB:
+        raise HTTPException(503,f"حافظه آزاد فقط {free} گیگابایت است؛ برای جلوگیری از هنگ، پردازش شروع نشد. برنامه‌های اضافی را ببندید.")
+
 def new_job(kind,pid):
     jid=uuid.uuid4().hex[:12]
-    with JOBS_LOCK: JOBS[jid]={"id":jid,"kind":kind,"project_id":pid,"status":"queued","progress":0,"message":"در صف پردازش"}
+    with JOBS_LOCK:
+        if any(j.get("status") in ("queued","running") for j in JOBS.values()):
+            raise HTTPException(409,"یک پردازش دیگر در حال اجراست. برای جلوگیری از هنگ باید همان کار تمام شود یا لغو شود.")
+        JOBS[jid]={"id":jid,"kind":kind,"project_id":pid,"status":"queued","progress":0,"message":"در صف پردازش"}
     return jid
+
+def check_not_cancelled(jid):
+    with JOBS_LOCK:
+        if JOBS.get(jid,{}).get("status")=="cancelled":
+            raise RuntimeError("پردازش به درخواست کاربر لغو شد")
 
 def clips_for(d):
     a=[]
@@ -613,6 +636,7 @@ def start_animation_analysis(pid:str,request:Request,background:BackgroundTasks)
         raise HTTPException(400,"مدت ویدئو قابل تشخیص نیست.")
     if duration>600:
         raise HTTPException(400,"در نسخه فعلی، تحلیل خودکار برای ویدئوهای حداکثر ۱۰ دقیقه فعال است.")
+    assert_memory_budget()
     status=ollama_status()
     if not status.get("available"):
         raise HTTPException(424,"برای تحلیل تصویری رایگان، ابتدا Ollama را نصب و اجرا کنید.")
@@ -627,7 +651,10 @@ def animation_analysis_worker(jid,pid):
         d=load_project(pid)
         src=media_file(pid,d["source"]["filename"])
         frames_dir=pdir(pid)/"assets"/"animation_frames"
-        def progress(value,message): set_job(jid,progress=value,message=message,status="running")
+        def progress(value,message):
+            check_not_cancelled(jid)
+            set_job(jid,progress=value,message=message,status="running")
+        check_not_cancelled(jid)
         set_job(jid,status="running",progress=3,message="شروع تحلیل انیمیشن")
         result=analyze_animation(src,frames_dir,float(d["source"].get("duration") or 0),ffmpeg(),progress)
         d["animation_dubbing"]=result
@@ -707,6 +734,7 @@ def start_animation_audio(pid:str,request:Request,background:BackgroundTasks):
     missing=[x.get("name") or x.get("id") for x in script.get("characters",[]) if str(x.get("id")) in used_ids and not x.get("voice_reference")]
     if missing:
         raise HTTPException(400,"برای این شخصیت‌ها نمونه صدای مرجع بارگذاری نشده است: "+ "، ".join(missing))
+    assert_memory_budget()
     jid=new_job("animation_tts",pid)
     background.add_task(animation_audio_worker,jid,pid)
     return {"job_id":jid}
@@ -715,7 +743,10 @@ def animation_audio_worker(jid,pid):
     try:
         d=load_project(pid)
         script=d.get("animation_dubbing") or {}
-        def progress(value,message): set_job(jid,progress=value,message=message,status="running")
+        def progress(value,message):
+            check_not_cancelled(jid)
+            set_job(jid,progress=value,message=message,status="running")
+        check_not_cancelled(jid)
         set_job(jid,status="running",progress=2,message="راه‌اندازی موتور صدای فارسی")
         ensure_moss_tts_service(progress)
         script=generate_voice_tracks(pdir(pid),script,progress)
@@ -734,6 +765,7 @@ def start_animation_dub_render(pid:str,request:Request,background:BackgroundTask
         raise HTTPException(400,"فایل اصلی پیدا نشد.")
     if not (d.get("animation_dubbing") or {}).get("dialogues"):
         raise HTTPException(400,"فیلمنامه دوبله وجود ندارد.")
+    assert_memory_budget()
     jid=new_job("animation_dub_render",pid)
     background.add_task(animation_dub_render_worker,jid,pid,keep_original_audio)
     return {"job_id":jid}
@@ -756,6 +788,16 @@ def animation_dub_render_worker(jid,pid,keep_original_audio):
 
 @app.get("/api/jobs/{jid}")
 def job(jid:str): return get_job(jid)
+
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid:str,request:Request):
+    role(request,("admin","editor"))
+    with JOBS_LOCK:
+        if jid not in JOBS: raise HTTPException(404,"کار پیدا نشد")
+        state=JOBS[jid]
+        if state.get("status") in ("queued","running"):
+            state.update(status="cancelled",message="لغو درخواست شد؛ فراخوانی جاری ممکن است قبل از توقف کامل شود.")
+        return dict(state)
 @app.get("/outputs/{pid}/{filename}")
 def output(pid:str,filename:str): return FileResponse(child_file(pdir(pid)/"renders",filename),filename=Path(filename).name)
 @app.get("/api/projects/{pid}/srt")

@@ -116,13 +116,13 @@ def ensure_moss_tts_service(progress: Callable[[int, str], None] | None = None, 
     raise RuntimeError("آماده‌سازی موتور صدای فارسی بیش از حد طول کشید. اتصال اینترنت و گزارش خطا را بررسی کنید.")
 
 
-def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int = 600, keep_alive: str = "10m") -> str:
+def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int = 600, keep_alive: str = "45s") -> str:
     payload: dict[str, Any] = {
         "model": VISION_MODEL,
         "messages": messages,
         "stream": False,
         "keep_alive": keep_alive,
-        "options": {"temperature": 0.2, "num_ctx": recommended_profile()["vision_context"], "num_predict": 4096, "num_thread": recommended_profile()["vision_threads"]},
+        "options": {"temperature": 0.2, "num_ctx": recommended_profile()["vision_context"], "num_predict": 1400, "num_thread": recommended_profile()["vision_threads"]},
     }
     if json_mode:
         payload["format"] = "json"
@@ -217,7 +217,7 @@ def transcribe_animation_audio(video: Path, progress: Callable[[int, str], None]
 
 def _frame_observations(frames: list[dict], progress: Callable[[int, str], None] | None = None) -> list[str]:
     observations: list[str] = []
-    batch_size = 4
+    batch_size = 1
     batches = [frames[i:i + batch_size] for i in range(0, len(frames), batch_size)]
     for batch_index, batch in enumerate(batches):
         image_data = []
