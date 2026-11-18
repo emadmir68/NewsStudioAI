@@ -1,18 +1,19 @@
 [Setup]
 AppId={{8C5A2F2A-31E7-4A4E-A11D-000000000202}
 AppName=News Studio AI
-AppVersion=0.3.1
+AppVersion=0.4.0
 DefaultDirName={localappdata}\Programs\News Studio AI
 DefaultGroupName=News Studio AI
 OutputDir=..\installer-output
-OutputBaseFilename=NewsStudioAI_Setup_0.3.1
-Compression=lzma2
-SolidCompression=yes
+OutputBaseFilename=NewsStudioAI_0.4.0_Offline_Setup
+Compression=lzma2/fast
+SolidCompression=no
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 
 [Files]
 Source: "..\dist\NewsStudioAI\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\vendor\ai\*"; DestDir: "{app}\ai"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{group}\News Studio AI"; Filename: "{app}\NewsStudioAI.exe"
