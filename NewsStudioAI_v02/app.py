@@ -408,7 +408,9 @@ def transcribe_worker(jid,pid,model_name):
         set_job(jid,status="running",progress=5,message="آماده‌سازی Whisper")
         d=load_project(pid); src=media_file(pid,d["source"]["filename"])
         from faster_whisper import WhisperModel
-        model=WhisperModel(model_name,device="cpu",compute_type="int8",cpu_threads=recommended_profile()["whisper_threads"],num_workers=1)
+        model_path=whisper_model_dir()
+        if not (model_path/"model.bin").exists(): raise RuntimeError("مدل Whisper داخلی در فایل‌های نصب یافت نشد.")
+        model=WhisperModel(str(model_path),device="cpu",compute_type="int8",cpu_threads=recommended_profile()["whisper_threads"],num_workers=1)
         set_job(jid,progress=25,message="تشخیص گفتار فارسی در حال انجام است")
         segs,info=model.transcribe(str(src),language="fa",task="transcribe",beam_size=1,best_of=1,vad_filter=True,condition_on_previous_text=False)
         raw=[{"start":float(s.start),"end":float(s.end),"text":s.text.strip()} for s in segs]
