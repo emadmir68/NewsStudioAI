@@ -59,7 +59,7 @@ def profile_for(ram_gb: float, logical_cpus: int) -> dict:
         "compute_type": "int8",
         "whisper_model": "base" if balanced else "tiny",
         "whisper_threads": min(2, half_cpu),
-        "vision_model": "qwen3-vl:2b",
+        "vision_model": "qwen3.5:0.8b",
         "vision_threads": min(2, half_cpu),
         "vision_context": 2048 if balanced else 1536,
         "frames": 12 if balanced else 8,
