@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>News Studio AI | دوبله فارسی</title>
+<style>
+:root{font-family:Tahoma,"Segoe UI",sans-serif;color-scheme:light;--ink:#172539;--muted:#677589;--line:#e2e8ee;--accent:#176ba0;--accent-soft:#eaf5fa;--bg:#f4f7fa;--warn:#995621}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.9}
+header{background:#fff;border-bottom:1px solid var(--line);padding:14px 6vw;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:17px}.mark{display:grid;place-items:center;background:#143a56;color:white;width:42px;height:42px;border-radius:13px;letter-spacing:-2px}
+.muted{color:var(--muted)}.small{font-size:12px}.container{max-width:1000px;margin:32px auto;padding:0 20px 32px}
+h1{font-size:25px;margin:0 0 8px}h2{font-size:17px;margin:0 0 12px}
+.intro{margin:0 0 25px;color:var(--muted)}.card{background:white;border:1px solid var(--line);border-radius:17px;padding:26px;margin-bottom:18px;box-shadow:0 5px 24px #162d4008}
+button,.btn{font-family:inherit;font-size:13px;border:0;border-radius:9px;padding:12px 19px;background:#176ba0;color:#fff;cursor:pointer;font-weight:700;min-height:44px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button:hover:enabled{filter:brightness(.94)}button:disabled{cursor:not-allowed;opacity:.4}
+.btn-light{background:#edf2f7;color:#1c3850;border:1px solid #d9e4ed}.btn-warn{background:#fff2e8;color:#8b4c1c;border:1px solid #f1dac7}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.space{justify-content:space-between}
+input,textarea,select{font-family:inherit;padding:10px;border:1px solid #d5e0e9;border-radius:9px;background:white;color:var(--ink);font-size:13px}
+input[type=file]{border:0;padding:0;max-width:100%}input[type=number]{width:85px}input[type=text]{max-width:100%}textarea{width:100%;min-height:66px;resize:vertical}
+label{display:grid;gap:6px;font-weight:600}.field{margin:0 0 12px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin:20px 0}
+.steps div{border-radius:10px;background:#e7edf3;padding:11px 9px;text-align:center;font-size:12px;font-weight:bold;color:#678}
+.steps div.active{background:#d7edf8;color:#15547d}.steps div.done{background:#e3f5e8;color:#226546}
+.drop{border:2px dashed #aec7db;border-radius:13px;padding:25px;background:#f8fbff;text-align:center}
+.badge{display:inline-block;border-radius:20px;background:#eef2f7;padding:3px 10px;font-size:11px;font-weight:bold}
+.notice{background:#fff8ef;border:1px solid #f3d8aa;border-radius:10px;color:#80501b;padding:10px 14px;font-size:12px;margin:12px 0}
+.ok{background:#e8f6ec;color:#216f3a;border-color:#bce4c6}
+[hidden]{display:none!important}.progress-track{height:9px;border-radius:99px;background:#dce8ef;overflow:hidden;margin:12px 0}
+.progress-fill{height:100%;background:#1f7fb0;width:0;transition:width .3s}
+.dialogue{border:1px solid #e6ebf1;border-radius:11px;padding:12px;display:grid;grid-template-columns:1fr 1fr 3fr;gap:10px;margin:10px 0}
+.dialogue .wide{grid-column:1/-1}.character{border:1px solid var(--line);border-radius:11px;padding:12px;margin:8px 0;display:grid;gap:8px}
+#videoPreview{width:100%;max-height:310px;border-radius:12px;background:#0b1825;margin:13px 0;object-fit:contain}
+a{color:#126493}footer{color:#7d8c9b;font-size:11px;text-align:center;padding:6px 0 24px}
+@media(max-width:700px){.steps{grid-template-columns:repeat(3,1fr)}.container{padding:0 13px}.card{padding:17px}.dialogue{grid-template-columns:1fr 1fr}.dialogue .voice-select{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header><div class="brand"><span class="mark">NS</span><div>News Studio AI <div class="small muted">دوبله فارسی | محیط ساده و ایمن</div></div></div><a href="/advanced" class="btn btn-light small" title="محیط کامل تدوین خبر">تنظیمات پیشرفته</a></header>
+<main class="container">
+<section class="card" id="authBox" hidden>
+  <h1 id="authHeading">ورود</h1><p class="muted">برای حفظ پروژه‌های خود وارد شوید.</p>
+  <form id="authForm"><label class="field">نام کاربری انگلیسی<input id="username" required minlength="3" autocomplete="username"></label>
+  <label class="field">رمز عبور<input id="password" type="password" required minlength="10" autocomplete="current-password"></label>
+  <button type="submit">ادامه</button></form><p id="authError" class="notice" hidden></p>
+</section>
+<div id="mainBox" hidden>
+<h1>از انیمیشن تا صدای فارسی، در پنج قدم</h1>
+<p class="intro">همه‌چیز در یک صفحه؛ هر پردازش جداگانه و فقط با اجازه تو شروع می‌شود.</p>
+<div class="steps"><div id="stage1" class="active">۱. ویدئو</div><div id="stage2">۲. تحلیل</div><div id="stage3">۳. دیالوگ</div><div id="stage4">۴. صداگذاری</div><div id="stage5">۵. خروجی</div></div>
+
+<section class="card">
+ <div class="row space"><h2>۱. انیمیشنت را انتخاب کن</h2><button id="freshProject" class="btn-light">پروژه تازه</button></div>
+ <div class="drop"><p>فایل MP4، MOV یا MKV را انتخاب کن</p><input id="videoInput" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/*"><p class="small muted" id="videoName">هنوز ویدئویی انتخاب نشده است</p></div>
+ <video id="videoPreview" hidden controls></video><div id="projectName" class="small muted"></div>
+</section>
+
+<section class="card">
+ <h2>۲. برنامه ویدئو را بررسی کند</h2>
+ <div class="row"><span class="badge" id="hardwareState">بررسی توان سیستم…</span><span class="badge" id="engineState">بررسی موتور تحلیل…</span></div>
+ <p class="notice" id="engineInfo">برای جلوگیری از هنگ‌کردن، تحلیل تنها پس از بررسی حافظه و آمادگی موتور اجرا می‌شود.</p>
+ <button id="analyzeBtn" disabled>شروع تحلیل انیمیشن</button>
+</section>
+<section class="card" id="scriptSection">
+ <h2>۳. متن و شخصیت‌ها را بررسی کن</h2><p class="muted small" id="summary">پس از تحلیل، خلاصه داستان و دیالوگ‌ها اینجا نمایش داده می‌شود.</p>
+ <div id="characters"></div><div id="dialogues"></div>
+ <button id="saveScriptBtn" class="btn-light" disabled>ذخیره اصلاحات</button>
+</section>
+<section class="card">
+ <h2>۴. صدای فارسی بساز</h2><p class="small muted">برای هر شخصیت یک نمونه صدای مجاز بارگذاری کن. موتور صدا فقط هنگام نیاز فعال می‌شود.</p>
+ <button id="audioBtn" disabled>تولید صدای شخصیت‌ها</button>
+</section>
+<section class="card">
+ <h2>۵. خروجی ویدئوی فارسی</h2>
+ <label class="row small"><input id="originalSound" type="checkbox">نگه‌داشتن صدای اصلی با حجم بسیار کم</label>
+ <div class="row" style="margin-top:12px"><button id="renderBtn" disabled>ساخت MP4 دوبله‌شده</button><a id="resultLink" class="btn" hidden target="_blank" rel="noopener">دانلود ویدئوی آماده</a></div>
+</section>
+<section class="card" id="progressBox" hidden>
+ <div class="row space"><strong id="progressMessage">در حال پردازش</strong><span id="percent">۰٪</span></div>
+ <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+ <button id="cancelBtn" class="btn-warn">درخواست توقف پردازش</button>
+ <p class="small muted">توقف ممکن است تا پایان مرحله فعلی طول بکشد. برای اجرای پردازش دیگر ابتدا پایان توقف را تأیید کن.</p>
+</section>
+<p class="notice" id="alert" hidden></p>
+</div>
+</main>
+<footer>نسخه آزمایشی ایمن — موتورهای هوش مصنوعی باید قبل از انتشار آفلاین، داخل بسته نهایی قرار بگیرند.</footer>
+<script src="/static/safe.js"></script>
+</body></html>
