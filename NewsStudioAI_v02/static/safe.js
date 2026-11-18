@@ -35,13 +35,13 @@ async function checkStatus() {
   const [health, engines] = await Promise.all([request("/api/health"),request("/api/animation-ai/status")]);
   const free = Number(health.available_ram_gb || 0);
   $("hardwareState").textContent = "رم آزاد: " + (free ? free.toFixed(1) + " گیگابایت" : "نامشخص") + " | حالت ایمن";
-  $("engineState").textContent = engines.vision?.model_ready ? "موتور تصویر آماده" : "موتور تصویر آماده نیست";
+  $("engineState").textContent = engines.vision?.model_ready && engines.tts?.ready ? "هر دو موتور داخلی آماده‌اند" : "فایل‌های یک موتور ناقص‌اند";
   if (!engines.vision?.model_ready) {
-    $("engineInfo").textContent = "موتور تحلیل تصویر همراه این نسخه آزمایشی بسته‌بندی نشده است. از نصب دستی مدل‌های سنگین خودداری کن؛ نسخه آفلاین باید پیش از انتشار تکمیل شود.";
+    $("engineInfo").textContent = "مدل بینایی در این نصب یافت نشد؛ نصب‌کننده کامل حاوی موتورهای داخلی را نصب کن.";
   } else if (free && free < 5.5) {
     $("engineInfo").textContent = "حافظه آزاد برای پردازش ایمن کافی نیست؛ برنامه‌های اضافی را ببند.";
   } else {
-    $("engineInfo").textContent = "مدل تحلیل در دسترس است؛ برنامه ابتدا فقط چند فریم نمونه را بررسی می‌کند.";
+    $("engineInfo").textContent = "موتورهای داخلی آماده‌اند؛ هر بار فقط یک پردازش با CPU محدود اجرا می‌شود.";
   }
   $("analyzeBtn").disabled = !project?.source || !engines.vision?.model_ready || Boolean(free && free < 5.5) || !!activeJobId;
   $("audioBtn").disabled = !(script?.dialogues || []).length || !!activeJobId;
@@ -70,8 +70,7 @@ function renderScript() {
     '<section class="character" data-character="'+escapeText(c.id)+'">'+
     '<strong>'+escapeText(c.name)+'</strong>'+
     '<span class="small muted">'+escapeText(c.voice_profile || "صدای طبیعی")+'</span>'+
-    '<span class="small">'+(c.voice_reference ? "✓ نمونه صدای مرجع ثبت شده" : "نمونه صدای مرجع هنوز بارگذاری نشده")+'</span>'+
-    '<input type="file" class="voiceFile" accept="audio/*">'+
+    '<span class="small">صدای داخلی فارسی؛ بدون نیاز به فایل مرجع</span>'+
     '</section>').join("");
   $("dialogues").innerHTML = lines.map(line => {
     const opts = characters.map(c=>'<option value="'+escapeText(c.id)+'" '+(c.id===line.character_id ? "selected":"")+'>'+escapeText(c.name)+'</option>').join("");
@@ -84,17 +83,7 @@ function renderScript() {
   $("saveScriptBtn").disabled = !lines.length || !!activeJobId;
   $("audioBtn").disabled = !lines.length || !!activeJobId;
   $("renderBtn").disabled = !lines.some(line=>line.audio_file) || !!activeJobId;
-  document.querySelectorAll(".voiceFile").forEach(input=>input.addEventListener("change",async ()=>{
-    const file=input.files?.[0];
-    if (!file) return;
-    try {
-      const id=input.closest(".character").dataset.character;
-      const form=new FormData();form.append("file",file);
-      await request("/api/projects/"+project.id+"/animation-dubbing/voice/"+encodeURIComponent(id),{method:"POST",body:form});
-      await loadProject(project.id);
-      message("نمونه صدای شخصیت ثبت شد.",true);
-    } catch(e){message(e.message);}
-  }));
+
 }
 async function saveScript() {
   if (!script?.dialogues?.length) return;
