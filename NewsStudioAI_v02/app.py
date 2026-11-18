@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from animation_dubbing import ollama_status, moss_tts_status, ensure_moss_tts_service, analyze_animation, generate_voice_tracks, render_dubbed_video, _sanitize_script
 from pydantic import BaseModel
 from hardware_profile import recommended_profile, available_ram_gb
-from embedded_engines import ensure_vision_started, shutdown_vision
+from embedded_engines import ensure_vision_started, shutdown_vision, whisper_model_dir
 
 try:
     import sys
