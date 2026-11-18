@@ -22,7 +22,7 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from hardware_profile import recommended_profile
-from embedded_engines import VISION_MODEL, VISION_URL as OLLAMA_URL, vision_status, voice_status, create_persian_wav
+from embedded_engines import VISION_MODEL, VISION_URL as OLLAMA_URL, vision_status, voice_status, create_persian_wav, whisper_model_dir
 
 
 
