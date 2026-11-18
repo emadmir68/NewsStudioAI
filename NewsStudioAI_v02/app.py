@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from animation_dubbing import ollama_status, moss_tts_status, ensure_moss_tts_service, analyze_animation, generate_voice_tracks, render_dubbed_video, _sanitize_script
 from pydantic import BaseModel
 from hardware_profile import recommended_profile, available_ram_gb
+from embedded_engines import ensure_vision_started, shutdown_vision
 
 try:
     import sys
@@ -27,7 +28,7 @@ AUTH_DB = WORKSPACE / "auth.sqlite3"
 STATIC_DIR = RESOURCE_DIR / "static"
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE.mkdir(parents=True, exist_ok=True)
-app = FastAPI(title="News Studio AI", version="0.3.1", docs_url=None, redoc_url=None)
+app = FastAPI(title="News Studio AI", version="0.4.0", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
@@ -186,7 +187,7 @@ def health():
     except Exception: whisper=False
     try: import PIL; pillow=True
     except Exception: pillow=False
-    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"available_ram_gb":available_ram_gb(),"version":"safe-preview"}
+    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"available_ram_gb":available_ram_gb(),"version":"0.4.0-internal-preview"}
 
 @app.get("/api/animation-ai/status")
 def animation_ai_status():
@@ -642,9 +643,9 @@ def start_animation_analysis(pid:str,request:Request,background:BackgroundTasks)
     assert_memory_budget()
     status=ollama_status()
     if not status.get("available"):
-        raise HTTPException(424,"برای تحلیل تصویری رایگان، ابتدا Ollama را نصب و اجرا کنید.")
+        raise HTTPException(424,status.get("message") or "موتور تصویر داخلی نصب نیست.")
     if not status.get("model_ready"):
-        raise HTTPException(424,f"مدل {status.get('model')} نصب نیست. اسکریپت نصب موتورهای هوشمند را اجرا کنید.")
+        raise HTTPException(424,f"مدل داخلی {status.get('model')} همراه نصب‌کننده پیدا نشد.")
     jid=new_job("animation_analysis",pid)
     background.add_task(animation_analysis_worker,jid,pid)
     return {"job_id":jid}
@@ -659,6 +660,8 @@ def animation_analysis_worker(jid,pid):
             set_job(jid,progress=value,message=message,status="running")
         check_not_cancelled(jid)
         set_job(jid,status="running",progress=3,message="شروع تحلیل انیمیشن")
+        ensure_vision_started(progress)
+        check_not_cancelled(jid)
         result=analyze_animation(src,frames_dir,float(d["source"].get("duration") or 0),ffmpeg(),progress)
         d["animation_dubbing"]=result
         d["updated_at"]=datetime.now().isoformat(timespec="seconds")
@@ -670,6 +673,8 @@ def animation_analysis_worker(jid,pid):
         })
     except Exception as e:
         set_job(jid,status="failed",progress=100,message=str(e))
+    finally:
+        shutdown_vision()
 
 @app.put("/api/projects/{pid}/animation-dubbing/script")
 def update_animation_script(pid:str,data:dict,request:Request):
@@ -733,10 +738,6 @@ def start_animation_audio(pid:str,request:Request,background:BackgroundTasks):
     script=d.get("animation_dubbing") or {}
     if not script.get("dialogues"):
         raise HTTPException(400,"ابتدا انیمیشن را تحلیل و فیلمنامه را آماده کنید.")
-    used_ids={str(x.get("character_id") or "") for x in script.get("dialogues",[])}
-    missing=[x.get("name") or x.get("id") for x in script.get("characters",[]) if str(x.get("id")) in used_ids and not x.get("voice_reference")]
-    if missing:
-        raise HTTPException(400,"برای این شخصیت‌ها نمونه صدای مرجع بارگذاری نشده است: "+ "، ".join(missing))
     assert_memory_budget()
     jid=new_job("animation_tts",pid)
     background.add_task(animation_audio_worker,jid,pid)
