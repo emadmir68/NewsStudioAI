@@ -187,7 +187,7 @@ def health():
     except Exception: whisper=False
     try: import PIL; pillow=True
     except Exception: pillow=False
-    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"available_ram_gb":available_ram_gb(),"version":"0.4.0-internal-preview"}
+    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"available_ram_gb":available_ram_gb(),"embedded_ai":{"vision":ollama_status()["model_ready"],"tts":moss_tts_status()["ready"],"whisper":(whisper_model_dir()/"model.bin").is_file()},"version":"0.4.0-internal-preview"}
 
 @app.get("/api/animation-ai/status")
 def animation_ai_status():
