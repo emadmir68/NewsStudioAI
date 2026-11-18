@@ -82,7 +82,7 @@ jobs:
               }).encode(),headers={"Content-Type":"application/json"})
               with urlopen(req,timeout=240) as response: reply=json.load(response)
               assert reply.get("message",{}).get("content","").strip(),reply
-              print("Bundled vision inference succeeded",reply["message"]["content"][:150])
+              print("Bundled vision inference succeeded",reply["message"]["content"][:150].encode("ascii","backslashreplace").decode("ascii"))
           finally:
               e.shutdown_vision()
           '@ | Set-Content bundled_smoke.py -Encoding UTF8
