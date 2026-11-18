@@ -75,6 +75,9 @@ async function loadAnimationDubbing() {
     animationDubbing = results[1];
     const vision = status.vision || {};
     const tts = status.tts || {};
+    const perf = status.performance || {};
+    const profileNode = $("hardwareProfile");
+    if (profileNode) profileNode.textContent = perf.label_fa ? "پروفایل فعال: " + perf.label_fa + " | رم شناسایی‌شده: " + perf.installed_ram_gb + " GB | هسته‌های منطقی: " + perf.logical_cpus + " | Whisper: " + perf.whisper_model + " / int8 / CPU | فریم‌ها: " + perf.frames + " | رندر: " + perf.render_threads + " رشته" : "پروفایل سخت‌افزاری هنوز مشخص نشده است.";
     $("visionAIStatus").textContent = vision.model_ready ? "آماده · " + vision.model : (vision.available ? "Ollama فعال؛ مدل نصب نیست" : "Ollama اجرا نیست");
     $("visionAIStatus").style.color = vision.model_ready ? "#6ed4ac" : "#e6b76c";
     $("ttsAIStatus").textContent = tts.ready ? "آماده · صدای فارسی" : (tts.available ? "در حال آماده‌سازی" : "خاموش؛ هنگام تولید روشن می‌شود");

@@ -1,9 +1,9 @@
-name: Test and build Windows release v0.3.0
+name: Test and build Windows release v0.3.1
 on:
   push:
     branches: [main]
     paths:
-      - 'NewsStudioAI_v0.3.0_Windows_Source.tar.xz'
+      - 'NewsStudioAI_v0.3.1_Windows_Source.tar.xz'
       - 'scripts/prepare_v021.py'
       - '.github/workflows/source-audit.yml'
       - 'NewsStudioAI_v02/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: newsstudioai-v0.3.0-release
+  group: newsstudioai-v0.3.1-release
   cancel-in-progress: true
 jobs:
   source-audit:
@@ -43,7 +43,7 @@ jobs:
       - name: Run source checks and integration tests
         working-directory: NewsStudioAI_v02
         run: |
-          python -m compileall -q app.py launcher.py animation_dubbing.py tests
+          python -m compileall -q app.py launcher.py animation_dubbing.py hardware_profile.py tests
           node --check static/app.js
           node --check static/animation.js
           python -m pytest -q
@@ -57,16 +57,16 @@ jobs:
       - name: Create updated source archive
         shell: bash
         run: |
-          tar --exclude='*/.venv' --exclude='*/__pycache__' --exclude='*/.pytest_cache' --exclude='*.pyc' --exclude='*/workspace/auth.sqlite3*' --exclude='*/build' --exclude='*/dist' --exclude='*/installer-output' --exclude='*/vendor/ffmpeg' -cJf NewsStudioAI_v0.3.0_Windows_Source.tar.xz NewsStudioAI_v02
-          xz -t NewsStudioAI_v0.3.0_Windows_Source.tar.xz
-          sha256sum NewsStudioAI_v0.3.0_Windows_Source.tar.xz
+          tar --exclude='*/.venv' --exclude='*/__pycache__' --exclude='*/.pytest_cache' --exclude='*.pyc' --exclude='*/workspace/auth.sqlite3*' --exclude='*/build' --exclude='*/dist' --exclude='*/installer-output' --exclude='*/vendor/ffmpeg' -cJf NewsStudioAI_v0.3.1_Windows_Source.tar.xz NewsStudioAI_v02
+          xz -t NewsStudioAI_v0.3.1_Windows_Source.tar.xz
+          sha256sum NewsStudioAI_v0.3.1_Windows_Source.tar.xz
       - name: Upload tested source package
         uses: actions/upload-artifact@v4
         with:
           name: newsstudioai-source-package
           path: |
             NewsStudioAI_v02/
-            NewsStudioAI_v0.3.0_Windows_Source.tar.xz
+            NewsStudioAI_v0.3.1_Windows_Source.tar.xz
             source-inventory.txt
           if-no-files-found: error
           retention-days: 14
@@ -107,8 +107,9 @@ jobs:
           Set-Location (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v02')
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-ai.txt -r requirements-desktop.txt -r requirements-dev.txt pyinstaller
-          python -m compileall -q app.py launcher.py tests
+          python -m compileall -q app.py launcher.py animation_dubbing.py hardware_profile.py tests
           node --check static/app.js
+          node --check static/animation.js
           python -m pytest -q
       - name: Build Windows application
         shell: pwsh
@@ -144,6 +145,7 @@ jobs:
             }
             if (-not $health) { throw 'Standalone NewsStudioAI.exe did not start its local API within 90 seconds.' }
             if (-not $health.ffmpeg -or -not $health.ffprobe) { throw 'Standalone EXE cannot locate its embedded FFmpeg tools.' }
+            if (-not $health.hardware -or $health.hardware.whisper_model -notin @("small","base")) { throw "Hardware profile API is missing in standalone EXE." }
             Write-Host "Standalone single-file EXE smoke test passed. Version: $($health.version)"
           } finally {
             $process.Refresh()
@@ -189,7 +191,7 @@ jobs:
           $compiler = @('C:\Program Files (x86)\Inno Setup 6\ISCC.exe','C:\Program Files\Inno Setup 6\ISCC.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $compiler) { throw 'Inno Setup compiler was not found after installation.' }
           & $compiler 'installer\NewsStudioAI.iss'
-          if (-not (Test-Path 'installer-output\NewsStudioAI_Setup_0.3.0.exe')) { throw 'Inno Setup did not produce the installer.' }
+          if (-not (Test-Path 'installer-output\NewsStudioAI_Setup_0.3.1.exe')) { throw 'Inno Setup did not produce the installer.' }
       - name: Prepare release files
         shell: pwsh
         run: |
@@ -197,10 +199,10 @@ jobs:
           Set-Location (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v02')
           $release = Join-Path $env:GITHUB_WORKSPACE 'release_output'
           New-Item -ItemType Directory -Path $release -Force | Out-Null
-          Copy-Item 'installer-output\NewsStudioAI_Setup_0.3.0.exe' $release
-          Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.3.0.exe')
-          Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.3.0.zip') -CompressionLevel Optimal
-          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.3.0_Windows_Source.tar.xz') $release
+          Copy-Item 'installer-output\NewsStudioAI_Setup_0.3.1.exe' $release
+          Copy-Item 'dist\NewsStudioAI.exe' (Join-Path $release 'NewsStudioAI_0.3.1.exe')
+          Compress-Archive -Path 'dist\NewsStudioAI\*' -DestinationPath (Join-Path $release 'NewsStudioAI_Portable_0.3.1.zip') -CompressionLevel Optimal
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v0.3.1_Windows_Source.tar.xz') $release
           Get-ChildItem $release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Set-Content (Join-Path $release 'SHA256SUMS.txt')
       - name: Upload Windows release files
         uses: actions/upload-artifact@v4
@@ -222,15 +224,15 @@ jobs:
       - name: Publish public GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.0
+          tag_name: v0.3.1
           target_commitish: main
-          name: News Studio AI v0.3.0
+          name: News Studio AI v0.3.1
           generate_release_notes: true
           overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true
           body: |
-            نسخه 0.3.0 استودیوی تدوین خبر با رابط فارسی و دوبله هوشمند انیمیشن.
+            نسخه 0.3.1 استودیوی تدوین خبر با رابط فارسی و دوبله هوشمند انیمیشن.
             
             - نصب‌کننده Windows x64 با FFmpeg و ffprobe همراه
             - نسخه Portable
@@ -238,8 +240,8 @@ jobs:
             - تحلیل محلی انیمیشن، تولید فیلمنامه فارسی، صداسازی شخصیت‌ها و میکس دوبله
             - آزمون‌های API، نقش‌ها، تشخیص سکوت، زیرنویس و رندر سه نسبت تصویر
           files: |
-            release_files/NewsStudioAI_Setup_0.3.0.exe
-            release_files/NewsStudioAI_0.3.0.exe
-            release_files/NewsStudioAI_Portable_0.3.0.zip
-            release_files/NewsStudioAI_v0.3.0_Windows_Source.tar.xz
+            release_files/NewsStudioAI_Setup_0.3.1.exe
+            release_files/NewsStudioAI_0.3.1.exe
+            release_files/NewsStudioAI_Portable_0.3.1.zip
+            release_files/NewsStudioAI_v0.3.1_Windows_Source.tar.xz
             release_files/SHA256SUMS.txt

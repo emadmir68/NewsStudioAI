@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from animation_dubbing import ollama_status, moss_tts_status, ensure_moss_tts_service, analyze_animation, generate_voice_tracks, render_dubbed_video, _sanitize_script
 from pydantic import BaseModel
+from hardware_profile import recommended_profile
 
 try:
     import sys
@@ -26,7 +27,7 @@ AUTH_DB = WORKSPACE / "auth.sqlite3"
 STATIC_DIR = RESOURCE_DIR / "static"
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE.mkdir(parents=True, exist_ok=True)
-app = FastAPI(title="News Studio AI", version="0.3.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="News Studio AI", version="0.3.1", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
@@ -178,11 +179,11 @@ def health():
     except Exception: whisper=False
     try: import PIL; pillow=True
     except Exception: pillow=False
-    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"version":"0.3.0"}
+    return {"ok":True,"ffmpeg":bool(ffmpeg()),"ffprobe":bool(ffprobe()),"whisper":whisper,"pillow":pillow,"hardware":recommended_profile(),"version":"0.3.1"}
 
 @app.get("/api/animation-ai/status")
 def animation_ai_status():
-    return {"vision":ollama_status(),"tts":moss_tts_status(),"free_local":True}
+    return {"vision":ollama_status(),"tts":moss_tts_status(),"performance":recommended_profile(),"free_local":True}
 
 
 @app.get("/api/auth/status")
@@ -380,7 +381,7 @@ def transcribe_worker(jid,pid,model_name):
         set_job(jid,status="running",progress=5,message="آماده‌سازی Whisper")
         d=load_project(pid); src=media_file(pid,d["source"]["filename"])
         from faster_whisper import WhisperModel
-        model=WhisperModel(model_name,device="cpu",compute_type="int8",cpu_threads=2,num_workers=1)
+        model=WhisperModel(model_name,device="cpu",compute_type="int8",cpu_threads=recommended_profile()["whisper_threads"],num_workers=1)
         set_job(jid,progress=25,message="تشخیص گفتار فارسی در حال انجام است")
         segs,info=model.transcribe(str(src),language="fa",task="transcribe",beam_size=1,best_of=1,vad_filter=True,condition_on_previous_text=False)
         raw=[{"start":float(s.start),"end":float(s.end),"text":s.text.strip()} for s in segs]
@@ -389,7 +390,8 @@ def transcribe_worker(jid,pid,model_name):
     except Exception as e: set_job(jid,status="failed",progress=100,message=str(e))
 
 @app.post("/api/projects/{pid}/transcribe")
-def transcribe(pid:str,request:Request,background:BackgroundTasks,model:str="base"):
+def transcribe(pid:str,request:Request,background:BackgroundTasks,model:str|None=None):
+    model=model or recommended_profile()["whisper_model"]
     role(request,("admin","editor"))
     if model not in ("tiny","base","small"): raise HTTPException(400,"مدل معتبر نیست")
     d=load_project(pid)
@@ -585,7 +587,8 @@ def render_worker(jid,pid,profile):
         cmd=[ffmpeg(),"-y","-hide_banner",*inputs,"-filter_complex_threads","1","-filter_complex",";".join(graph),"-map",f"[{vlabel}]"]
         if audio_label: cmd += ["-map",f"[{audio_label}]","-c:a","aac","-b:a","192k","-ar","48000"]
         else: cmd += ["-an"]
-        cmd += ["-c:v","libx264","-preset","veryfast","-crf","23","-pix_fmt","yuv420p","-threads","2","-movflags","+faststart",str(out)]
+        settings=recommended_profile()
+        cmd += ["-c:v","libx264","-preset",settings["render_preset"],"-crf",str(settings["render_crf"]),"-pix_fmt","yuv420p","-threads",str(settings["render_threads"]),"-movflags","+faststart",str(out)]
         set_job(jid,progress=20,message="رندر تصویر، زیرنویس، گرافیک و صدا")
         result=subprocess.run(cmd,capture_output=True,text=True,timeout=21600)
         if result.returncode: raise RuntimeError("خطای FFmpeg: "+(result.stderr or result.stdout or "نامشخص")[-2800:])

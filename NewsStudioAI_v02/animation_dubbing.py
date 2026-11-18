@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from hardware_profile import recommended_profile
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 VISION_MODEL = "qwen3-vl:2b"
@@ -121,7 +122,7 @@ def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int 
         "messages": messages,
         "stream": False,
         "keep_alive": keep_alive,
-        "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": 4096},
+        "options": {"temperature": 0.2, "num_ctx": recommended_profile()["vision_context"], "num_predict": 4096, "num_thread": recommended_profile()["vision_threads"]},
     }
     if json_mode:
         payload["format"] = "json"
@@ -145,16 +146,18 @@ def _extract_json(text: str) -> dict:
     raise ValueError("مدل پاسخ ساختاریافته و قابل‌خواندن تولید نکرد؛ دوباره تحلیل را اجرا کنید.")
 
 
-def extract_animation_frames(video: Path, frame_dir: Path, duration: float, ffmpeg: str, max_frames: int = 40) -> list[dict]:
+def extract_animation_frames(video: Path, frame_dir: Path, duration: float, ffmpeg: str, max_frames: int | None = None) -> list[dict]:
     if not ffmpeg:
         raise RuntimeError("FFmpeg در دسترس نیست.")
+    settings = recommended_profile()
+    max_frames = max_frames or settings["frames"]
     frame_dir.mkdir(parents=True, exist_ok=True)
     for old in frame_dir.glob("frame_*.jpg"):
         old.unlink(missing_ok=True)
     safe_duration = max(1.0, float(duration or 1.0))
     interval = max(2.5, safe_duration / max_frames)
     output_pattern = frame_dir / "frame_%03d.jpg"
-    vf = f"fps=1/{interval:.4f},scale=768:-2"
+    vf = f"fps=1/{interval:.4f},scale={settings['frame_width']}:-2"
     cmd = [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(video),
         "-vf", vf, "-frames:v", str(max_frames), "-q:v", "4", str(output_pattern),
@@ -180,7 +183,8 @@ def transcribe_animation_audio(video: Path, progress: Callable[[int, str], None]
     try:
         if progress:
             progress(5, "تشخیص گفتار اصلی و زبان ویدئو")
-        model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=2)
+        settings = recommended_profile()
+        model = WhisperModel(settings["whisper_model"], device="cpu", compute_type="int8", cpu_threads=settings["whisper_threads"])
         segments, info = model.transcribe(
             str(video), task="transcribe", language=None, beam_size=1,
             vad_filter=True, condition_on_previous_text=False,
@@ -414,7 +418,7 @@ def generate_voice_tracks(project_dir: Path, script: dict, progress: Callable[[i
                 "voice_clone_max_text_tokens": "75",
                 "enable_text_normalization": "0",
                 "enable_normalize_tts_text": "1",
-                "cpu_threads": "2",
+                "cpu_threads": str(recommended_profile()["tts_threads"]),
                 "do_sample": "1",
                 "text_temperature": "1.0",
                 "text_top_p": "1.0",
@@ -510,7 +514,8 @@ def render_dubbed_video(project_dir: Path, source: Path, script: dict, output_pa
         # Fallback for containers/codecs that cannot be muxed directly into MP4.
         retry = base_cmd.copy()
         video_codec = retry.index("-c:v") + 1
-        retry[video_codec:video_codec + 1] = ["libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+        settings = recommended_profile()
+        retry[video_codec:video_codec + 1] = ["libx264", "-preset", settings["render_preset"], "-crf", str(settings["render_crf"]), "-threads", str(settings["render_threads"]), "-pix_fmt", "yuv420p"]
         run = subprocess.run(retry, capture_output=True, text=True, timeout=7200)
     if run.returncode:
         raise RuntimeError("رندر دوبله ناموفق بود: " + (run.stderr or "")[-1800:])

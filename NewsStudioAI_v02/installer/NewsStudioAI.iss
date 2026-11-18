@@ -1,11 +1,11 @@
 [Setup]
 AppId={{8C5A2F2A-31E7-4A4E-A11D-000000000202}
 AppName=News Studio AI
-AppVersion=0.3.0
+AppVersion=0.3.1
 DefaultDirName={localappdata}\Programs\News Studio AI
 DefaultGroupName=News Studio AI
 OutputDir=..\installer-output
-OutputBaseFilename=NewsStudioAI_Setup_0.3.0
+OutputBaseFilename=NewsStudioAI_Setup_0.3.1
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
