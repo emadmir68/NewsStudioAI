@@ -121,7 +121,10 @@ def transcribe_animation_audio(video: Path, progress: Callable[[int, str], None]
         if progress:
             progress(5, "تشخیص گفتار اصلی و زبان ویدئو")
         settings = recommended_profile()
-        model = WhisperModel(settings["whisper_model"], device="cpu", compute_type="int8", cpu_threads=settings["whisper_threads"])
+        local_weights = whisper_model_dir()
+        if not (local_weights / "model.bin").exists():
+            return {"language": "", "segments": [], "note": "مدل تشخیص گفتار در بسته نصب یافت نشد."}
+        model = WhisperModel(str(local_weights), device="cpu", compute_type="int8", cpu_threads=settings["whisper_threads"])
         segments, info = model.transcribe(
             str(video), task="transcribe", language=None, beam_size=1,
             vad_filter=True, condition_on_previous_text=False,
