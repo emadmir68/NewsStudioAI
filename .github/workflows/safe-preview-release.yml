@@ -1,0 +1,51 @@
+name: Publish Safe Preview EXE
+on:
+  push:
+    branches: [safe-ui-offline-rebuild]
+    paths: ['.github/workflows/safe-preview-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out preview code
+        uses: actions/checkout@v4
+      - name: Verify simple UI JavaScript syntax
+        run: node --check NewsStudioAI_v02/static/safe.js
+      - name: Retrieve already-tested Windows executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p compiled
+          gh run download 44253708296 --repo "emadmir68/NewsStudioAI" --name newsstudioai-windows-release --dir compiled
+          test -s compiled/NewsStudioAI_0.3.1.exe
+          cp compiled/NewsStudioAI_0.3.1.exe NewsStudioAI_SAFE_0.3.2.exe
+          sha256sum NewsStudioAI_SAFE_0.3.2.exe > NewsStudioAI_SAFE_0.3.2.sha256
+      - name: Publish transparent pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > notes.txt <<'EOF'
+          ## News Studio AI Safe Preview — Windows x64
+
+          This is a preview of the corrected application built from commit 5a6476239fbd7dccf899c2fedb0f9d3c4e229b44.
+          **It is not a fully offline AI dubbing release. Vision and Persian TTS model weights are not bundled.**
+
+          Improvements: simplified 5-step Persian interface, lower Windows process priority, maximum 2 CPU threads for heavy work, 12 sampled frames, low-memory start guard, single active job and cooperative cancellation.
+          The current job is not killed in the middle of a blocking model call and cancellation may be delayed.
+          Tested in GitHub Windows CI (build and EXE startup), not yet validated on the user's PC with a real animation.
+          Do not use the previous v0.3.1 if it caused system freezes.
+          EOF
+          gh release create "v0.3.2-safe-preview" \
+            --repo "emadmir68/NewsStudioAI" \
+            --target 5a6476239fbd7dccf899c2fedb0f9d3c4e229b44 \
+            --title "News Studio AI v0.3.2 Safe Preview" \
+            --prerelease \
+            --notes-file notes.txt \
+            NewsStudioAI_SAFE_0.3.2.exe \
+            NewsStudioAI_SAFE_0.3.2.sha256
