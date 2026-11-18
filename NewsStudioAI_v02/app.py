@@ -377,7 +377,10 @@ def new_job(kind,pid):
 
 def check_not_cancelled(jid):
     with JOBS_LOCK:
-        if JOBS.get(jid,{}).get("status")=="cancelled":
+        state=JOBS.get(jid,{})
+        if state.get("cancel_requested"):
+            state["status"]="cancelled"
+            state["message"]="پردازش به درخواست کاربر لغو شد"
             raise RuntimeError("پردازش به درخواست کاربر لغو شد")
 
 def clips_for(d):
@@ -796,7 +799,7 @@ def cancel_job(jid:str,request:Request):
         if jid not in JOBS: raise HTTPException(404,"کار پیدا نشد")
         state=JOBS[jid]
         if state.get("status") in ("queued","running"):
-            state.update(status="cancelled",message="لغو درخواست شد؛ فراخوانی جاری ممکن است قبل از توقف کامل شود.")
+            state.update(cancel_requested=True,message="درخواست توقف ثبت شد؛ پس از مرحله فعلی متوقف می‌شود.")
         return dict(state)
 @app.get("/outputs/{pid}/{filename}")
 def output(pid:str,filename:str): return FileResponse(child_file(pdir(pid)/"renders",filename),filename=Path(filename).name)
