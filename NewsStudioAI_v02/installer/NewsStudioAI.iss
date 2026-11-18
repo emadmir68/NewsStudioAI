@@ -23,4 +23,4 @@ Name: "{autodesktop}\News Studio AI"; Filename: "{app}\NewsStudioAI.exe"; Tasks:
 Name: "desktopicon"; Description: "ایجاد میانبر روی دسکتاپ"; GroupDescription: "میانبرها:"
 
 [Run]
-Filename: "{app}\NewsStudioAI.exe"; Description: "اجرای News Studio AI"; Flags: postinstall nowait
+Filename: "{app}\NewsStudioAI.exe"; Description: "اجرای News Studio AI"; Flags: postinstall nowait skipifsilent
