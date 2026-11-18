@@ -35,11 +35,12 @@ def test_cancelled_job_state_is_not_overwritten():
     try:
         jid = app.new_job("animation_analysis", "abcdef12")
         with app.JOBS_LOCK:
-            app.JOBS[jid]["status"] = "cancelled"
-        app.set_job(jid, status="completed", progress=100)
-        assert app.get_job(jid)["status"] == "cancelled"
+            app.JOBS[jid]["cancel_requested"] = True
+        assert app.get_job(jid)["status"] == "queued"
         with pytest.raises(RuntimeError):
             app.check_not_cancelled(jid)
+        app.set_job(jid, status="completed", progress=100)
+        assert app.get_job(jid)["status"] == "cancelled"
     finally:
         with app.JOBS_LOCK:
             app.JOBS.clear()
