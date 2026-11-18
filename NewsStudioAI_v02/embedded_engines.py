@@ -51,6 +51,10 @@ def model_manifest() -> Path:
     return vision_models() / "manifests" / "registry.ollama.ai" / "library" / "qwen3.5" / "0.8b"
 
 
+def whisper_model_dir() -> Path:
+    return engine_root() / "whisper" / "base"
+
+
 def piper_binary() -> Path:
     return engine_root() / "piper" / ("piper.exe" if os.name == "nt" else "piper")
 
