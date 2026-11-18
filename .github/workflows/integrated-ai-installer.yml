@@ -1,0 +1,152 @@
+name: Build Integrated Offline AI Setup
+on:
+  push:
+    branches: [integrated-ai-installer]
+    paths: ['NewsStudioAI_v02/**', '.github/workflows/integrated-ai-installer.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: offline-integrated-setup
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build and test dependencies
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install -r requirements.txt -r requirements-ai.txt -r requirements-desktop.txt -r requirements-dev.txt pyinstaller
+          python -m compileall -q app.py animation_dubbing.py embedded_engines.py scripts/build_embedded_ai.py launcher.py tests
+          node --check static/safe.js
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) {throw 'Python tests failed'}
+      - name: Download packaged FFmpeg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $zip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          $extract=Join-Path $env:RUNNER_TEMP 'ffmpeg-extracted'
+          Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          $exe=Get-ChildItem $extract -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          $probe=Get-ChildItem $extract -Recurse -Filter ffprobe.exe | Select-Object -First 1
+          if (-not $exe -or -not $probe) {throw 'FFmpeg not found'}
+          $bin=Join-Path $env:GITHUB_WORKSPACE 'NewsStudioAI_v02\vendor\ffmpeg\bin'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          Copy-Item $exe.FullName (Join-Path $bin 'ffmpeg.exe')
+          Copy-Item $probe.FullName (Join-Path $bin 'ffprobe.exe')
+      - name: Build desktop application
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m PyInstaller --noconfirm --clean NewsStudioAI.spec
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path 'dist\NewsStudioAI\NewsStudioAI.exe')) {throw 'EXE build failed'}
+      - name: Bundle visual, voice, and speech models inside application
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          python -u scripts/build_embedded_ai.py
+          if ($LASTEXITCODE -ne 0) {throw 'Integrated AI model packaging failed'}
+      - name: Exercise bundled engines on Windows CPU
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          @'
+          import embedded_engines as e, tempfile, json
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          assert e.vision_status()["model_ready"], e.vision_status()
+          assert e.voice_status()["ready"], e.voice_status()
+          assert (e.whisper_model_dir()/"model.bin").is_file()
+          wav=Path(tempfile.gettempdir())/"newsstudio-piper-test.wav"
+          e.create_persian_wav("سلام. این یک آزمایش صدای فارسی است.",wav,timeout=100)
+          assert wav.stat().st_size > 3000, wav.stat().st_size
+          print("Persian Piper output bytes",wav.stat().st_size)
+          e.ensure_vision_started(timeout=100)
+          try:
+              req=Request(e.VISION_URL+"/api/chat",data=json.dumps({
+                  "model":e.VISION_MODEL,"messages":[{"role":"user","content":"Say hello in Persian."}],
+                  "stream":False,"think":False,"keep_alive":"0",
+                  "options":{"num_thread":2,"num_ctx":2048,"num_predict":30}
+              }).encode(),headers={"Content-Type":"application/json"})
+              with urlopen(req,timeout=240) as response: reply=json.load(response)
+              assert reply.get("message",{}).get("content","").strip(),reply
+              print("Bundled vision inference succeeded",reply["message"]["content"][:150])
+          finally:
+              e.shutdown_vision()
+          '@ | Set-Content bundled_smoke.py -Encoding UTF8
+          python bundled_smoke.py
+          if ($LASTEXITCODE -ne 0) {throw 'Bundled engine smoke test failed'}
+      - name: Build single complete offline Setup
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          choco install innosetup -y --no-progress
+          $compiler=@('C:\Program Files (x86)\Inno Setup 6\ISCC.exe','C:\Program Files\Inno Setup 6\ISCC.exe') | Where-Object {Test-Path $_} | Select-Object -First 1
+          if (-not $compiler) {throw 'Inno Setup not found'}
+          & $compiler 'installer\NewsStudioAI.iss'
+          if ($LASTEXITCODE -ne 0) {throw 'Inno Setup failed'}
+          $file='installer-output\NewsStudioAI_0.4.0_Offline_Setup.exe'
+          if (-not (Test-Path $file)) {throw 'Offline installer not created'}
+          $size=(Get-Item $file).Length
+          Write-Host "Installer bytes: $size"
+          if ($size -lt 500000000) {throw 'Installer missing AI weights'}
+          if ($size -gt 2147483648) {throw 'GitHub asset 2GiB limit exceeded'}
+      - name: Verify a real installed copy without Internet
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        run: |
+          $ErrorActionPreference='Stop'
+          $installer=Join-Path (Get-Location) 'installer-output\NewsStudioAI_0.4.0_Offline_Setup.exe'
+          $target=Join-Path $env:RUNNER_TEMP 'NewsStudioAI-Offline-Installed'
+          $job=Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$target+'"')) -PassThru -Wait
+          if ($job.ExitCode -ne 0) {throw "Install failed: $($job.ExitCode)"}
+          $files=@('NewsStudioAI.exe','ai\ollama\ollama.exe','ai\ollama\models\manifests\registry.ollama.ai\library\qwen3.5\0.8b','ai\piper\piper.exe','ai\piper\voices\fa_IR-amir-medium.onnx','ai\whisper\base\model.bin')
+          foreach ($f in $files) {if (-not (Test-Path (Join-Path $target $f))) {throw "Installer missing: $f"}}
+          $process=Start-Process -FilePath (Join-Path $target 'NewsStudioAI.exe') -ArgumentList '--server-only' -PassThru -WindowStyle Hidden
+          try {
+            $health=$null
+            for ($i=0;$i -lt 60;$i++) {
+              $process.Refresh()
+              if ($process.HasExited) {throw 'Installed app exited'}
+              try {$health=Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/health' -TimeoutSec 2; break}
+              catch {Start-Sleep -Seconds 1}
+            }
+            if (-not $health -or -not ($health.embedded_ai.vision -and $health.embedded_ai.tts -and $health.embedded_ai.whisper)) {
+              throw "Full integrated engine health check failed: $($health | ConvertTo-Json -Depth 4)"
+            }
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) {Stop-Process -Id $process.Id -Force}
+          }
+      - name: Publish verified complete offline Setup
+        shell: pwsh
+        working-directory: NewsStudioAI_v02
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $file='installer-output\NewsStudioAI_0.4.0_Offline_Setup.exe'
+          $hash=(Get-FileHash $file -Algorithm SHA256).Hash
+          "$hash  NewsStudioAI_0.4.0_Offline_Setup.exe" | Set-Content 'SHA256SUMS.txt'
+          @'
+          News Studio AI 0.4.0 — Integrated Windows x64 Offline Preview.
+          Includes embedded Qwen3.5 0.8B vision via CPU Ollama, Piper Amir Persian voice, and Whisper Base. No first-run AI model downloads or external setup scripts.
+          CPU safe mode: limited workers, sequential vision then TTS, memory checks and a 5-step Persian interface.
+          Piper Amir contains only one speaker; it does not yet offer genuinely different cloned voices.
+          This preview must still be tested on the user's actual PC with real animation footage before production use.
+          '@ | Set-Content release_notes.txt
+          gh release create v0.4.0-integrated-preview --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "News Studio AI 0.4.0 Integrated Offline" --prerelease --notes-file release_notes.txt $file SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) {throw 'GitHub release upload failed'}
