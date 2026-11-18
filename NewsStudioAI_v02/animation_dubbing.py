@@ -22,10 +22,8 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from hardware_profile import recommended_profile
+from embedded_engines import VISION_MODEL, VISION_URL as OLLAMA_URL, vision_status, voice_status, create_persian_wav
 
-OLLAMA_URL = "http://127.0.0.1:11434"
-VISION_MODEL = "qwen3-vl:2b"
-MOSS_TTS_URL = "http://127.0.0.1:18083"
 
 
 def _json_request(url: str, method: str = "GET", payload: dict | None = None, timeout: int = 20) -> dict:
@@ -40,80 +38,18 @@ def _json_request(url: str, method: str = "GET", payload: dict | None = None, ti
 
 
 def ollama_status() -> dict:
-    try:
-        data = _json_request(f"{OLLAMA_URL}/api/tags", timeout=4)
-        names = [str(x.get("name", "")) for x in data.get("models", [])]
-        found = any(n == VISION_MODEL or n.startswith(VISION_MODEL + "-") for n in names)
-        return {
-            "available": True,
-            "model_ready": found,
-            "model": VISION_MODEL,
-            "models": names,
-            "message": "مدل بینایی آماده است." if found else f"برای فعال‌سازی، مدل {VISION_MODEL} را دریافت کنید.",
-        }
-    except Exception:
-        return {
-            "available": False,
-            "model_ready": False,
-            "model": VISION_MODEL,
-            "models": [],
-            "message": "Ollama نصب یا اجرا نشده است.",
-        }
+    return vision_status()
 
 
 def moss_tts_status() -> dict:
-    try:
-        health = _json_request(f"{MOSS_TTS_URL}/health", timeout=4)
-        warm = _json_request(f"{MOSS_TTS_URL}/api/warmup-status", timeout=4)
-        ready = bool(health.get("status") == "ok" and warm.get("ready"))
-        return {
-            "available": True,
-            "ready": ready,
-            "failed": bool(warm.get("failed")),
-            "message": "موتور صدای فارسی آماده است." if ready else str(warm.get("status_text") or warm.get("message") or "موتور صدا در حال آماده‌سازی است."),
-        }
-    except Exception:
-        return {
-            "available": False,
-            "ready": False,
-            "message": "موتور صدای محلی نصب یا اجرا نشده است.",
-        }
+    return voice_status()
 
 
-def ensure_moss_tts_service(progress: Callable[[int, str], None] | None = None, timeout: int = 1800) -> None:
-    status = moss_tts_status()
-    if status.get("ready"):
-        return
-    process = None
-    if not status.get("available"):
-        root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NewsStudioAI" / "animation-ai"
-        python = root / "venv" / "Scripts" / "python.exe"
-        repo = root / "MOSS-TTS-Nano"
-        if not python.is_file() or not (repo / "app.py").is_file():
-            raise RuntimeError("موتور صدای فارسی نصب نشده است. ابتدا اسکریپت نصب موتورهای هوشمند را اجرا کنید.")
-        log_dir = root / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "moss-tts.log"
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        with log_path.open("ab") as log:
-            process = subprocess.Popen(
-                [str(python), "app.py", "--device", "cpu", "--host", "127.0.0.1", "--port", "18083"],
-                cwd=str(repo), stdout=log, stderr=log, creationflags=flags,
-            )
-    started = time.time()
-    while time.time() - started < timeout:
-        status = moss_tts_status()
-        if status.get("ready"):
-            return
-        if status.get("failed"):
-            raise RuntimeError(status.get("message") or "موتور صدای فارسی هنگام آماده‌سازی خطا داد.")
-        if process is not None and process.poll() is not None:
-            raise RuntimeError("موتور صدای فارسی متوقف شد. گزارش خطا در پوشه LocalAppData\\\\NewsStudioAI\\\\animation-ai\\\\logs قرار دارد.")
-        elapsed = int(time.time() - started)
-        if progress:
-            progress(min(28, 4 + int(24 * elapsed / max(1, timeout))), status.get("message") or "در حال بارگذاری مدل صدای فارسی")
-        time.sleep(3)
-    raise RuntimeError("آماده‌سازی موتور صدای فارسی بیش از حد طول کشید. اتصال اینترنت و گزارش خطا را بررسی کنید.")
+def ensure_moss_tts_service(progress=None) -> None:
+    if progress:
+        progress(3, "بررسی موتور فارسی داخلی")
+    if not voice_status()["ready"]:
+        raise RuntimeError(voice_status()["message"])
 
 
 def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int = 600, keep_alive: str = "45s") -> str:
@@ -121,6 +57,7 @@ def _ollama_chat(messages: list[dict], *, json_mode: bool = False, timeout: int 
         "model": VISION_MODEL,
         "messages": messages,
         "stream": False,
+        "think": False,
         "keep_alive": keep_alive,
         "options": {"temperature": 0.2, "num_ctx": recommended_profile()["vision_context"], "num_predict": 1400, "num_thread": recommended_profile()["vision_threads"]},
     }
@@ -336,6 +273,7 @@ def analyze_animation(video: Path, frame_dir: Path, duration: float, ffmpeg: str
     if progress:
         progress(10, f"{len(frames)} فریم برای تحلیل آماده شد")
     observations = _frame_observations(frames, progress)
+    observations = [x[:550] for x in observations]
     prompt = (
         "بر اساس گزارش‌های مشاهده‌ای زیر که از فریم‌های زمان‌دار یک انیمیشن استخراج شده‌اند، "
         "یک طرح دوبله کامل و منسجم به فارسی محاوره‌ای طبیعی ایران بنویس. اگر گفتار اصلی تشخیص داده شده، معنای آن را دقیق و وفادار حفظ کن و آن را به فارسی طبیعی بازنویسی کن؛ زمان‌های گفتار اصلی مرجع زمان‌بندی باشند. "
@@ -387,58 +325,27 @@ def _multipart_request(url: str, fields: dict[str, str], file_field: str, file_p
 
 
 def generate_voice_tracks(project_dir: Path, script: dict, progress: Callable[[int, str], None] | None = None) -> dict:
-    status = moss_tts_status()
-    if not status["available"]:
-        raise RuntimeError("موتور صدای فارسی در دسترس نیست. راهنمای نصب موتور دوبله هوشمند را اجرا کنید.")
-    if not status["ready"]:
-        raise RuntimeError("موتور صدای فارسی هنوز آماده نشده است؛ چند لحظه صبر کنید و دوباره تلاش کنید.")
-    characters = {str(c["id"]): c for c in script.get("characters", [])}
-    dialogues = script.get("dialogues", [])
-    if not dialogues:
+    if not voice_status()["ready"]:
+        raise RuntimeError(voice_status()["message"])
+    lines = script.get("dialogues", [])
+    if not lines:
         raise RuntimeError("هیچ دیالوگی برای تولید صدا وجود ندارد.")
-    output_dir = project_dir / "renders" / "animation_dub"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    completed = 0
-    for index, line in enumerate(dialogues):
-        cid = str(line.get("character_id") or "")
-        character = characters.get(cid) or {}
-        reference = str(character.get("voice_reference") or "")
-        if not reference:
-            raise RuntimeError(f"برای شخصیت «{character.get('name') or cid}» نمونه صدای مرجع بارگذاری نشده است.")
-        reference_path = (project_dir / "assets" / Path(reference).name).resolve()
-        if not reference_path.is_file() or reference_path.parent != (project_dir / "assets").resolve():
-            raise RuntimeError(f"فایل نمونه صدای شخصیت «{character.get('name') or cid}» پیدا نشد.")
-        text = str(line.get("text") or "").strip()
-        max_frames = max(90, min(375, int(len(text) * 2.2 + 70)))
-        response = _multipart_request(
-            f"{MOSS_TTS_URL}/api/generate",
-            {
-                "text": text,
-                "max_new_frames": str(max_frames),
-                "voice_clone_max_text_tokens": "75",
-                "enable_text_normalization": "0",
-                "enable_normalize_tts_text": "1",
-                "cpu_threads": str(recommended_profile()["tts_threads"]),
-                "do_sample": "1",
-                "text_temperature": "1.0",
-                "text_top_p": "1.0",
-                "text_top_k": "50",
-                "audio_temperature": "0.8",
-                "audio_top_p": "0.95",
-                "audio_top_k": "25",
-                "audio_repetition_penalty": "1.2",
-            },
-            "prompt_audio", reference_path,
-        )
-        encoded = response.get("audio_base64")
-        if not encoded:
-            raise RuntimeError(str(response.get("error") or "موتور صدا خروجی صوتی تولید نکرد."))
-        filename = f"line_{index + 1:03d}_{uuid.uuid4().hex[:6]}.wav"
-        (output_dir / filename).write_bytes(base64.b64decode(encoded))
-        line["audio_file"] = f"animation_dub/{filename}"
-        completed += 1
+    outdir = project_dir / "renders" / "animation_dub"
+    outdir.mkdir(parents=True, exist_ok=True)
+    for i, line in enumerate(lines):
         if progress:
-            progress(5 + int(95 * completed / len(dialogues)), f"ساخت صدای دیالوگ {completed} از {len(dialogues)}")
+            progress(5 + int(90 * i / len(lines)), f"صداسازی دیالوگ {i+1} از {len(lines)}")
+        text = str(line.get("text") or "").strip()
+        if not text:
+            continue
+        cid = str(line.get("character_id") or "")
+        # Bundled Piper Amir has ONE distinct voice. Alternate speed per character.
+        speed = (0.92, 1.0, 1.08)[sum(ord(ch) for ch in cid) % 3]
+        filename = f"line_{i+1:03d}_{uuid.uuid4().hex[:6]}.wav"
+        create_persian_wav(text, outdir / filename, speed=speed)
+        line["audio_file"] = "animation_dub/" + filename
+    if progress:
+        progress(100, "صدای فارسی داخلی آماده شد")
     return script
 
 
