@@ -1,7 +1,7 @@
 name: Test and build Windows release v0.3.1
 on:
   push:
-    branches: [main]
+    branches: [main, safe-ui-offline-rebuild]
     paths:
       - 'NewsStudioAI_v0.3.1_Windows_Source.tar.xz'
       - 'scripts/prepare_v021.py'
